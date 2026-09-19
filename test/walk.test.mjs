@@ -207,13 +207,18 @@ test("a finding is replayed on its own session, with a shot per action and the c
 
   const evidence = (name) => join(out, "evidence", name);
   assert.deepEqual(acts(repro), [
+    "console --clear",
+    "errors --clear",
     `tab new ${SIGNUP}`,
     `record start ${evidence("1.webm")} --cursor`,
     "fill @e2 jev.tester@example.com",
+    "wait --load load",
     `screenshot ${evidence("1-1.png")}`,
     "fill @e3 Test-Passw0rd-42",
+    "wait --load load",
     `screenshot ${evidence("1-2.png")}`,
     "click @e4 --human",
+    "wait --load load",
     `screenshot ${evidence("1-3.png")}`,
     "record stop",
     "tab close",
@@ -262,6 +267,8 @@ test("a control the replay no longer finds on the page makes the finding a one-o
 
   assert.equal(json(out, "findings.json").findings[0].reproduced, false);
   assert.deepEqual(acts(repro), [
+    "console --clear",
+    "errors --clear",
     `tab new ${SIGNUP}`,
     `record start ${join(out, "evidence", "1.webm")} --cursor`,
     "record stop",

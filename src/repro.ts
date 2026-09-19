@@ -73,6 +73,9 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
   await mkdir(evidence, { recursive: true });
   const recording = join(evidence, `${number}.webm`);
 
+  // The buffers hold what every earlier replay printed, and this finding quotes only its own.
+  await browser.run(["console", "--clear"]);
+  await browser.run(["errors", "--clear"]);
   await browser.run(["tab", "new", input.home]);
   await browser.run(["record", "start", recording, "--cursor"]);
   try {
@@ -85,6 +88,8 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
 
       const value = action.fixture === null ? action.value : fixtures[action.fixture];
       await browser.run(commandFor({ operation: action.kind, ref: element.ref, value }, true) as string[]);
+      // A click that navigates returns before the new page paints, and the shot is the evidence.
+      await browser.run(["wait", "--load", "load"]);
       const screenshot = join(evidence, `${number}-${action.step}.png`);
       await browser.run(["screenshot", screenshot]);
       const { url } = (await browser.run(["get", "url"])) as { url: string };
