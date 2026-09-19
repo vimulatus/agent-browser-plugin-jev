@@ -6,7 +6,7 @@ import { defaultOut } from "../dist/run.js";
 import { actionsBefore, walk } from "../dist/walk.js";
 import { lines, replayingJev } from "./helpers.mjs";
 
-const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
+const READS = new Set(["snapshot -i", "snapshot", "get title", "get url", "console", "errors", "network requests"]);
 
 function scenario(name) {
   return JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8"));
@@ -16,7 +16,7 @@ function walkPages(name) {
   return JSON.parse(readFileSync(new URL("./fixtures/walk-pages.json", import.meta.url), "utf8"))[name];
 }
 
-/** An agent-browser over saved pages: `open` goes to the page with that url, and a move table follows each act. */
+/** An agent-browser over saved pages: `open` and `tab new` go to the page with that url, and a move table follows each act. */
 function walkBrowser(states, moves) {
   const state = { index: 0, calls: [] };
   return {
@@ -24,9 +24,10 @@ function walkBrowser(states, moves) {
     async run(args) {
       const command = args.join(" ");
       state.calls.push(command);
-      if (args[0] === "open") {
-        const at = states.findIndex((page) => page.url === args[1]);
-        assert.ok(at >= 0, `the walk opened ${args[1]}, which no saved page serves`);
+      const opened = args[0] === "open" ? args[1] : command.startsWith("tab new ") ? args[2] : null;
+      if (opened !== null) {
+        const at = states.findIndex((page) => page.url === opened);
+        assert.ok(at >= 0, `the walk opened ${opened}, which no saved page serves`);
         state.index = at;
       } else if (moves[`${state.index} ${command}`] !== undefined) {
         state.index = moves[`${state.index} ${command}`];
@@ -39,6 +40,8 @@ function walkBrowser(states, moves) {
           return { snapshot: page.content ?? page.snapshot };
         case "get title":
           return { title: page.title };
+        case "get url":
+          return { url: page.url };
         case "console":
           return { messages: page.console ?? [] };
         case "errors":
@@ -85,9 +88,10 @@ function json(out, name) {
   return JSON.parse(readFileSync(join(out, name), "utf8"));
 }
 
-async function drive(name, { moves = {}, ...overrides } = {}) {
+async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
   const recorded = scenario(name);
   const browser = walkBrowser(walkPages(recorded.pages), moves);
+  const replay = walkBrowser(walkPages(repro.pages ?? recorded.pages), repro.moves ?? {});
   const jev = replayingJev(recorded.walk ?? recorded.responses);
   const policyJev = recorded.policy === undefined ? silent : replayingPolicyJev(recorded.policy);
   const options = {
@@ -101,8 +105,8 @@ async function drive(name, { moves = {}, ...overrides } = {}) {
     policy: "errors",
     ...overrides,
   };
-  const result = await walk(options, { browser, jev, policyJev });
-  return { result, browser, jev, policyJev, out: options.out };
+  const result = await walk(options, { browser, repro: replay, jev, policyJev });
+  return { result, browser, repro: replay, jev, policyJev, out: options.out };
 }
 
 test("a walk fills a form from the fixtures, and a field no fixture fits lands in unfilled.json", async (t) => {
@@ -181,6 +185,91 @@ test("the last three actions before a finding are replayable from the run direct
   assert.deepEqual(actionsBefore(out, 2).map((action) => action.label), ["Email"]);
 });
 
+const SIGNUP = "http://127.0.0.1:8765/signup.html";
+const WELCOME = "http://127.0.0.1:8765/welcome.html";
+const FILLED_IN = {
+  "0 fill @e2 jev.tester@example.com": 1,
+  "1 fill @e3 Test-Passw0rd-42": 2,
+};
+
+/** The walk fills the form and lands on a page that logs an error; the replay takes the same three actions. */
+function signupRun(reproPages) {
+  return {
+    url: SIGNUP,
+    moves: { ...FILLED_IN, "2 click @e4": 3 },
+    repro: { pages: reproPages, moves: { ...FILLED_IN, "2 click @e4 --human": 3 } },
+  };
+}
+
+test("a finding is replayed on its own session, with a shot per action and the console it printed", async (t) => {
+  const { result, browser, repro, out } = await drive("walk-repro", signupRun("signup-bug"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const evidence = (name) => join(out, "evidence", name);
+  assert.deepEqual(acts(repro), [
+    `tab new ${SIGNUP}`,
+    `record start ${evidence("1.webm")} --cursor`,
+    "fill @e2 jev.tester@example.com",
+    `screenshot ${evidence("1-1.png")}`,
+    "fill @e3 Test-Passw0rd-42",
+    `screenshot ${evidence("1-2.png")}`,
+    "click @e4 --human",
+    `screenshot ${evidence("1-3.png")}`,
+    "record stop",
+    "tab close",
+    "close",
+  ]);
+  assert.deepEqual(
+    acts(browser).filter((call) => /^(record|screenshot|tab|close)/.test(call)),
+    [],
+    "the walk's own session neither records nor changes tab",
+  );
+
+  const { findings, summary } = json(out, "findings.json");
+  const [finding] = findings;
+  assert.equal(finding.title, `${WELCOME} logs TypeError: order is not defined`);
+  assert.equal(finding.reproduced, true);
+  assert.equal(finding.recording, evidence("1.webm"));
+  assert.deepEqual(finding.repro, [
+    { action: 'fill "Email" with "jev.tester@example.com"', url: SIGNUP, screenshot: evidence("1-1.png") },
+    { action: 'fill "Password" with "•••"', url: SIGNUP, screenshot: evidence("1-2.png") },
+    { action: 'click "Create account"', url: WELCOME, screenshot: evidence("1-3.png") },
+  ]);
+  assert.deepEqual(finding.console, ["error: TypeError: order is not defined"]);
+  assert.deepEqual(finding.errors, []);
+  assert.deepEqual(summary, [{ title: finding.title, severity: "medium", where: WELCOME }]);
+  assert.equal(result.findings, 1);
+});
+
+test("a finding the replay cannot raise again is kept, unreproduced", async (t) => {
+  const { result, repro, out } = await drive("walk-repro", signupRun("signup-clean"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const { findings, summary } = json(out, "findings.json");
+  assert.equal(findings.length, 1);
+  assert.equal(summary.length, findings.length);
+  assert.deepEqual(
+    [findings[0].reproduced, findings[0].repro, findings[0].recording],
+    [false, undefined, undefined],
+  );
+  assert.deepEqual(acts(repro).slice(-3), ["record stop", "tab close", "close"]);
+  assert.equal(result.findings, 1);
+});
+
+test("a control the replay no longer finds on the page makes the finding a one-off", async (t) => {
+  const { repro, out } = await drive("walk-repro", signupRun("signup-moved"));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(json(out, "findings.json").findings[0].reproduced, false);
+  assert.deepEqual(acts(repro), [
+    `tab new ${SIGNUP}`,
+    `record start ${join(out, "evidence", "1.webm")} --cursor`,
+    "record stop",
+    "tab close",
+    "close",
+  ]);
+});
+
 test("every control is tried once across pages, and the frontier sends the walk back for the ones it left", async (t) => {
   const { result, browser, out } = await drive("walk-shop", {
     url: "http://127.0.0.1:8765/index.html",
@@ -214,8 +303,9 @@ test("the same console error on two pages is one finding with a repeat per sight
   });
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
-  const findings = json(out, "findings.json");
+  const { findings, summary } = json(out, "findings.json");
   assert.equal(findings.length, 1);
+  assert.equal(summary.length, findings.length);
   assert.equal(result.findings, 1);
   assert.deepEqual(
     [findings[0].title, findings[0].severity, findings[0].where, findings[0].step],
@@ -280,12 +370,13 @@ test("the policy is told which control the walk clicked, and each new finding is
 
   assert.deepEqual(Object.keys(policyJev.calls[0].questions), ["page_shows_error_to_user", "stuck_loading"]);
   assert.equal(
-    policyJev.calls[2].questions.outcome_matches_action.instructions.question,
+    policyJev.calls[3].questions.outcome_matches_action.instructions.question,
     'The user just did CLICK on "Save". Does the page now show what that promises?',
   );
   assert.match(policyJev.calls[0].state.page.text, /Something went wrong/);
 
-  const findings = json(out, "findings.json");
+  const { findings, summary } = json(out, "findings.json");
+  assert.equal(summary.length, findings.length);
   assert.deepEqual(
     findings.map((finding) => [finding.title, finding.severity, finding.step, finding.repeats.length]),
     [
