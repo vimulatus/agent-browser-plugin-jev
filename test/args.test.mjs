@@ -54,6 +54,11 @@ test("--max-steps 0 parses, so a policy can judge the current page without movin
   assert.equal(parseRunArgs(["g", ...SESSION, "--max-steps", "0"]).maxSteps, 0);
 });
 
+test("--policy names the file every step of the goal run is judged against", () => {
+  assert.equal(parseRunArgs(["g", ...SESSION, "--policy", "errors"]).policy, "errors");
+  assert.equal(parseRunArgs(["g", ...SESSION]).policy, undefined);
+});
+
 test("--record resolves against the working directory and --human takes no value", () => {
   const options = parseRunArgs(["g", ...SESSION, "--record", "out.webm", "--human", "--max-steps", "3"]);
   assert.equal(options.record, resolve("out.webm"));

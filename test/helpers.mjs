@@ -27,7 +27,7 @@ export function scriptedBrowser(states, advance) {
         case "get title":
           return { title: page.title };
         case "console":
-          return { messages: [] };
+          return { messages: page.console ?? [] };
         case "errors":
           return { errors: [] };
         case "network requests":

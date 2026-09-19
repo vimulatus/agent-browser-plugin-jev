@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { defaultOut, run } from "../dist/run.js";
 import { lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
@@ -32,13 +32,30 @@ function status(out) {
   return JSON.parse(readFileSync(join(out, "status.json"), "utf8"));
 }
 
+function findings(out) {
+  return JSON.parse(readFileSync(join(out, "findings.json"), "utf8"));
+}
+
+/** A policy Jev that answers nothing: a policy with no judge section must never reach the paid API. */
+function unaskedJev() {
+  const calls = [];
+  return {
+    calls,
+    async ask(state, questions) {
+      calls.push({ state, questions });
+      throw new Error(`no recorded policy answer for ${Object.keys(questions).join(", ")}`);
+    },
+  };
+}
+
 async function drive(name, goal, overrides = {}, advance) {
   const scenario = JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8"));
   const browser = scriptedBrowser(pages(scenario.pages), advance);
   const jev = replayingJev(replay(name));
+  const policyJev = unaskedJev();
   const run_options = options(goal ?? scenario.goal, overrides);
-  const result = await run(run_options, { browser, jev });
-  return { result, browser, jev, out: run_options.out };
+  const result = await run(run_options, { browser, jev, policyJev });
+  return { result, browser, jev, policyJev, out: run_options.out };
 }
 
 test("a goal walk types from the goal, clicks through and lands done", async (t) => {
@@ -58,6 +75,50 @@ test("a goal walk types from the goal, clicks through and lands done", async (t)
   assert.equal(jev.requests[2].state.recent_actions[0].pageChanged, true);
   assert.equal(status(out).status, "done");
   assert.equal(lines(join(out, "observed.jsonl")).length, 4);
+});
+
+test("a goal run without a policy judges nothing and writes no findings", async (t) => {
+  const { result, out } = await drive("login");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.findings, 0);
+  assert.equal(status(out).policy, null);
+  assert.equal(existsSync(join(out, "findings.json")), false);
+});
+
+test("a goal run with --policy raises the console error the login page logs", async (t) => {
+  const { result, policyJev, out } = await drive("login-policy", null, { policy: "errors" });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const error = "Uncaught TypeError: cannot read properties of null";
+  const where = "http://127.0.0.1:8765/login.html";
+  assert.equal(result.status, "done");
+  assert.equal(result.findings, 1);
+  assert.deepEqual(findings(out), {
+    findings: [
+      {
+        title: `${where} logs ${error}`,
+        severity: "medium",
+        where,
+        step: 2,
+        evidence: { console: { type: "error", text: error } },
+        repeats: [{ step: 3, where }],
+      },
+    ],
+    summary: [{ title: `${where} logs ${error}`, severity: "medium", where }],
+  });
+  assert.equal(status(out).findings, 1);
+  assert.equal(status(out).policy, "errors");
+  assert.deepEqual(policyJev.calls, [], "a policy with no judge section asks Jev nothing");
+});
+
+test("a policy that collects a HAR is refused: a goal run cannot reload the page under itself", async (t) => {
+  const run_options = options("log in", { policy: "perf" });
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  await assert.rejects(
+    run(run_options, { browser: scriptedBrowser(pages("login")), jev: replayingJev([]), policyJev: unaskedJev() }),
+    /policy perf: a HAR is recorded over a reload.*--max-steps 0/,
+  );
 });
 
 test("the typed password is masked in the run log", async (t) => {
