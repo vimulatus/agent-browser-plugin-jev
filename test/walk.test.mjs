@@ -16,7 +16,7 @@ function walkPages(name) {
   return JSON.parse(readFileSync(new URL("./fixtures/walk-pages.json", import.meta.url), "utf8"))[name];
 }
 
-/** An agent-browser over saved pages: `open` and `tab new` go to the page with that url, and a move table follows each act. */
+/** An agent-browser over saved pages: `open` goes to the page with that url, and a move table follows each act. */
 function walkBrowser(states, moves) {
   const state = { index: 0, calls: [] };
   return {
@@ -24,7 +24,7 @@ function walkBrowser(states, moves) {
     async run(args) {
       const command = args.join(" ");
       state.calls.push(command);
-      const opened = args[0] === "open" ? args[1] : command.startsWith("tab new ") ? args[2] : null;
+      const opened = args[0] === "open" ? args[1] : null;
       if (opened !== null) {
         const at = states.findIndex((page) => page.url === opened);
         assert.ok(at >= 0, `the walk opened ${opened}, which no saved page serves`);
@@ -209,8 +209,11 @@ test("a finding is replayed on its own session, with a shot per action and the c
   assert.deepEqual(acts(repro), [
     "console --clear",
     "errors --clear",
-    `tab new ${SIGNUP}`,
+    "network requests --clear",
+    "tab new about:blank",
     `record start ${evidence("1.webm")} --cursor`,
+    `open ${SIGNUP}`,
+    "wait --load networkidle",
     "fill @e2 jev.tester@example.com",
     "wait --load load",
     `screenshot ${evidence("1-1.png")}`,
@@ -269,8 +272,40 @@ test("a control the replay no longer finds on the page makes the finding a one-o
   assert.deepEqual(acts(repro), [
     "console --clear",
     "errors --clear",
-    `tab new ${SIGNUP}`,
+    "network requests --clear",
+    "tab new about:blank",
     `record start ${join(out, "evidence", "1.webm")} --cursor`,
+    `open ${SIGNUP}`,
+    "wait --load networkidle",
+    "record stop",
+    "tab close",
+    "close",
+  ]);
+});
+
+test("a finding from a request the page makes on load is replayed once the fresh tab has settled", async (t) => {
+  const orders = "http://127.0.0.1:8765/orders.html";
+  const { result, repro, out } = await drive("walk-load-request", {
+    url: orders,
+    repro: { pages: "orders-500-loading", moves: { "0 wait --load networkidle": 1 } },
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const { findings } = json(out, "findings.json");
+  assert.equal(result.findings, 1);
+  assert.equal(findings[0].title, "GET /api/orders returned 500");
+  assert.equal(findings[0].reproduced, true);
+  assert.equal(findings[0].recording, join(out, "evidence", "1.webm"));
+  assert.deepEqual(findings[0].repro, [], "a finding on the page the walk started from is replayed with no action");
+
+  assert.deepEqual(acts(repro), [
+    "console --clear",
+    "errors --clear",
+    "network requests --clear",
+    "tab new about:blank",
+    `record start ${join(out, "evidence", "1.webm")} --cursor`,
+    `open ${orders}`,
+    "wait --load networkidle",
     "record stop",
     "tab close",
     "close",
