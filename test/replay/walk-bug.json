@@ -3,23 +3,46 @@
   "walk": [
     {
       "model": "jev-1.13.0",
-      "answers": { "same_as_finding_0": { "type": "noul", "noul": 0.04 } },
-      "usage": { "input_tokens": 248, "output_tokens": 6 }
+      "answers": {
+        "same_as_finding_0": {
+          "type": "noul",
+          "noul": 0.04
+        }
+      },
+      "usage": {
+        "input_tokens": 248,
+        "output_tokens": 6
+      }
     },
     {
       "model": "jev-1.13.0",
       "answers": {
-        "same_as_finding_0": { "type": "noul", "noul": 0.93 },
-        "same_as_finding_1": { "type": "noul", "noul": 0.03 }
+        "same_as_finding_0": {
+          "type": "noul",
+          "noul": 0.93
+        },
+        "same_as_finding_1": {
+          "type": "noul",
+          "noul": 0.03
+        }
       },
-      "usage": { "input_tokens": 296, "output_tokens": 12 }
+      "usage": {
+        "input_tokens": 296,
+        "output_tokens": 12
+      }
     }
   ],
   "policy": [
     {
       "answers": {
-        "page_shows_error_to_user": { "type": "noul", "noul": 0.96 },
-        "stuck_loading": { "type": "noul", "noul": 0.04 }
+        "page_shows_error_to_user": {
+          "type": "noul",
+          "noul": 0.96
+        },
+        "stuck_loading": {
+          "type": "noul",
+          "noul": 0.04
+        }
       }
     },
     {
@@ -28,20 +51,47 @@
           "type": "choice",
           "choice": "medium",
           "confidence": 0.55,
-          "probabilities": { "critical": 0.05, "high": 0.36, "medium": 0.55, "low": 0.04 }
+          "probabilities": {
+            "critical": 0.05,
+            "high": 0.36,
+            "medium": 0.55,
+            "low": 0.04
+          }
         }
       }
     },
     {
       "answers": {
-        "page_shows_error_to_user": { "type": "noul", "noul": 0.96 },
+        "page_shows_error_to_user": {
+          "type": "noul",
+          "noul": 0.96
+        },
+        "stuck_loading": {
+          "type": "noul",
+          "noul": 0.04
+        }
+      }
+    },
+    {
+      "answers": {
+        "page_shows_error_to_user": {
+          "type": "noul",
+          "noul": 0.96
+        },
         "outcome_matches_action": {
           "type": "choice",
           "choice": "nothing",
           "confidence": 0.91,
-          "probabilities": { "expected": 0.03, "nothing": 0.91, "wrong": 0.06 }
+          "probabilities": {
+            "expected": 0.03,
+            "nothing": 0.91,
+            "wrong": 0.06
+          }
         },
-        "stuck_loading": { "type": "noul", "noul": 0.04 }
+        "stuck_loading": {
+          "type": "noul",
+          "noul": 0.04
+        }
       }
     },
     {
@@ -50,13 +100,45 @@
           "type": "choice",
           "choice": "high",
           "confidence": 0.78,
-          "probabilities": { "critical": 0.14, "high": 0.78, "medium": 0.07, "low": 0.01 }
+          "probabilities": {
+            "critical": 0.14,
+            "high": 0.78,
+            "medium": 0.07,
+            "low": 0.01
+          }
         },
         "severity#1": {
           "type": "choice",
           "choice": "medium",
           "confidence": 0.55,
-          "probabilities": { "critical": 0.05, "high": 0.36, "medium": 0.55, "low": 0.04 }
+          "probabilities": {
+            "critical": 0.05,
+            "high": 0.36,
+            "medium": 0.55,
+            "low": 0.04
+          }
+        }
+      }
+    },
+    {
+      "answers": {
+        "page_shows_error_to_user": {
+          "type": "noul",
+          "noul": 0.96
+        },
+        "outcome_matches_action": {
+          "type": "choice",
+          "choice": "nothing",
+          "confidence": 0.91,
+          "probabilities": {
+            "expected": 0.03,
+            "nothing": 0.91,
+            "wrong": 0.06
+          }
+        },
+        "stuck_loading": {
+          "type": "noul",
+          "noul": 0.04
         }
       }
     }

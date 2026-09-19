@@ -1,0 +1,47 @@
+{
+  "pages": "signup-bug",
+  "responses": [
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "1",
+          "confidence": 0.64,
+          "probabilities": { "1": 0.64, "2": 0.24, "3": 0.12 }
+        },
+        "fixture_value_1": {
+          "type": "choice",
+          "choice": "email",
+          "confidence": 0.94,
+          "probabilities": { "email": 0.94, "password": 0.01, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        },
+        "fixture_value_2": {
+          "type": "choice",
+          "choice": "password",
+          "confidence": 0.93,
+          "probabilities": { "email": 0.02, "password": 0.93, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        }
+      },
+      "usage": { "input_tokens": 631, "output_tokens": 24 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "2",
+          "confidence": 0.72,
+          "probabilities": { "2": 0.72, "3": 0.28 }
+        },
+        "fixture_value_2": {
+          "type": "choice",
+          "choice": "password",
+          "confidence": 0.93,
+          "probabilities": { "email": 0.02, "password": 0.93, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        }
+      },
+      "usage": { "input_tokens": 604, "output_tokens": 18 }
+    }
+  ]
+}
