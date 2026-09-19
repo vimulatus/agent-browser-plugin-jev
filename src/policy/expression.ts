@@ -1,19 +1,25 @@
 import { lookup, parsePath, type Path } from "./path.js";
 
-/** A parsed `when` clause: paths, `==`/`!=` against a literal, and `not`/`and`/`or`. */
+/** `==` and `!=` compare with a word, a string or a number; the ordered four need numbers on both sides. */
+export type Operator = "==" | "!=" | "<" | "<=" | ">" | ">=";
+
+const ORDERED = new Set<string>(["<", "<=", ">", ">="]);
+const OPERATORS = new Set<string>(["==", "!=", ...ORDERED]);
+
+/** A parsed `when` clause: paths, a comparison against a literal, and `not`/`and`/`or`. */
 export type Expression =
   | { kind: "path"; path: Path }
-  | { kind: "compare"; path: Path; op: "==" | "!="; value: string | number }
+  | { kind: "compare"; path: Path; op: Operator; value: string | number }
   | { kind: "not"; operand: Expression }
   | { kind: "and" | "or"; left: Expression; right: Expression };
 
 type Token =
-  | { kind: "(" | ")" | "==" | "!=" | "and" | "or" | "not" }
+  | { kind: "(" | ")" | Operator | "and" | "or" | "not" }
   | { kind: "path"; path: Path; text: string }
   | { kind: "string"; value: string }
   | { kind: "number"; value: number };
 
-const TOKEN = /\s*(?:(\(|\)|==|!=)|"([^"]*)"|'([^']*)'|(\d+(?:\.\d+)?)(?![\w.])|([A-Za-z_][\w.\[\]]*))/y;
+const TOKEN = /\s*(?:(\(|\)|==|!=|<=|>=|<|>)|"([^"]*)"|'([^']*)'|(\d+(?:\.\d+)?)(?![\w.])|([A-Za-z_][\w.\[\]]*))/y;
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
@@ -26,7 +32,7 @@ function tokenize(text: string): Token[] {
       throw new Error(`when "${text}": unexpected "${text.slice(at).trim()}"`);
     }
     const [, symbol, doubleQuoted, singleQuoted, number, word] = match;
-    if (symbol) tokens.push({ kind: symbol as "(" | ")" | "==" | "!=" });
+    if (symbol) tokens.push({ kind: symbol as "(" | ")" | Operator });
     else if (doubleQuoted !== undefined) tokens.push({ kind: "string", value: doubleQuoted });
     else if (singleQuoted !== undefined) tokens.push({ kind: "string", value: singleQuoted });
     else if (number !== undefined) tokens.push({ kind: "number", value: Number(number) });
@@ -86,10 +92,15 @@ export function parseWhen(text: string): Expression {
     if (token?.kind !== "path") return fail();
     at++;
     const op = peek();
-    if (op?.kind !== "==" && op?.kind !== "!=") return { kind: "path", path: token.path };
+    if (op === undefined || !isOperator(op.kind)) return { kind: "path", path: token.path };
     at++;
     const literal = peek();
-    if (literal?.kind === "string" || literal?.kind === "number") {
+    if (literal?.kind === "number") {
+      at++;
+      return { kind: "compare", path: token.path, op: op.kind, value: literal.value };
+    }
+    if (ORDERED.has(op.kind)) return fail();
+    if (literal?.kind === "string") {
       at++;
       return { kind: "compare", path: token.path, op: op.kind, value: literal.value };
     }
@@ -105,6 +116,10 @@ export function parseWhen(text: string): Expression {
   return expression;
 }
 
+function isOperator(kind: Token["kind"]): kind is Operator {
+  return OPERATORS.has(kind);
+}
+
 function holds(value: unknown): boolean {
   if (value === undefined || value === null || value === false || value === "") return false;
   return !(Array.isArray(value) && value.length === 0);
@@ -115,8 +130,20 @@ export function evaluate(expression: Expression, facts: unknown): boolean {
     case "path":
       return holds(lookup(facts, expression.path));
     case "compare": {
-      const equal = lookup(facts, expression.path) === expression.value;
-      return expression.op === "==" ? equal : !equal;
+      const value = lookup(facts, expression.path);
+      if (expression.op === "==") return value === expression.value;
+      if (expression.op === "!=") return value !== expression.value;
+      if (typeof value !== "number" || typeof expression.value !== "number") return false;
+      switch (expression.op) {
+        case "<":
+          return value < expression.value;
+        case "<=":
+          return value <= expression.value;
+        case ">":
+          return value > expression.value;
+        default:
+          return value >= expression.value;
+      }
     }
     case "not":
       return !evaluate(expression.operand, facts);
