@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { defaultOut, run } from "../dist/run.js";
+import { runStatus } from "../dist/worker.js";
 import { lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
@@ -277,4 +278,19 @@ test("the recording starts on the page --url opened, not on the page before it",
     "open http://127.0.0.1:8765/login.html",
     `record start ${record} --cursor`,
   ]);
+});
+
+test("a goal run carries durationMs, and jev.status reads back the number the run ended on", async (t) => {
+  const { result, out } = await drive("login");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const written = status(out).durationMs;
+  assert.ok(Number.isInteger(written) && written >= 0, `status.json holds durationMs ${written}`);
+  assert.ok(
+    Number.isInteger(result.durationMs) && result.durationMs >= 0,
+    `the result holds durationMs ${result.durationMs}`,
+  );
+  assert.ok(result.durationMs >= written, "the result is measured after the last status write");
+  assert.equal(runStatus({ out }).durationMs, written);
+  assert.equal(runStatus({ out }).durationMs, written, "a run that has ended reports the same duration every time");
 });

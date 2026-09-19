@@ -435,6 +435,26 @@ test("the policy is told which control the walk clicked, and each new finding is
   );
 });
 
+test("a walk carries durationMs, in its result and in status.json", async (t) => {
+  const { result, out } = await drive("walk-signup", {
+    url: "http://127.0.0.1:8765/signup.html",
+    moves: {
+      "0 fill @e2 jev.tester@example.com": 1,
+      "1 fill @e3 Test-Passw0rd-42": 2,
+      "2 click @e5": 3,
+    },
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const written = json(out, "status.json").durationMs;
+  assert.ok(Number.isInteger(written) && written >= 0, `status.json holds durationMs ${written}`);
+  assert.ok(
+    Number.isInteger(result.durationMs) && result.durationMs >= 0,
+    `the result holds durationMs ${result.durationMs}`,
+  );
+  assert.ok(result.durationMs >= written, "the result is measured after the last status write");
+});
+
 test("a policy that records a HAR cannot drive a walk", async () => {
   await assert.rejects(
     drive("walk-shop", { policy: "perf", url: "http://127.0.0.1:8765/index.html" }),

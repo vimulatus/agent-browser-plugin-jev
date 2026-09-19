@@ -62,5 +62,10 @@ test("run --policy errors --max-steps 0 prints those findings as JSON", () => {
   );
   assert.equal(result.stderr, "");
   assert.equal(result.status, 0);
-  assert.deepEqual(JSON.parse(result.stdout), { findings: FINDINGS });
+  const printed = JSON.parse(result.stdout);
+  assert.ok(
+    Number.isInteger(printed.durationMs) && printed.durationMs >= 0,
+    `the command printed durationMs ${printed.durationMs}`,
+  );
+  assert.deepEqual(printed, { findings: FINDINGS, durationMs: printed.durationMs });
 });
