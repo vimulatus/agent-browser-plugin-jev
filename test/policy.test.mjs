@@ -126,9 +126,60 @@ test("unknown names are rejected at load: collections, measures, buckets, sectio
       ),
     /okay/,
   );
-  assert.throws(() => parsePolicy("collect: [console]\njudge: {}\nreport: []"), /judge/);
   assert.throws(() => parsePolicy("collect: [console]\nreport:\n  - { when: console.errors.any, title: x }"), /severity/);
   assert.throws(() => parsePolicy("collect: [console]\nreport:\n  - { when: console.errors.any, title: x, severity: low, extra: 1 }"), /extra/);
   assert.throws(() => parsePolicy("collect: [console]"), /report/);
   assert.throws(() => parsePolicy("report: []"), /collect/);
+});
+
+const judging = (judge, report = "[]") => `collect: [har, snapshot]\njudge:\n${judge}\nreport: ${report}`;
+
+test("a judge question is rejected when its type, its criteria or what it runs over do not hold together", () => {
+  assert.throws(() => parsePolicy(judging("  kind: { type: score, over: request, instructions: how bad }")), /choice.*noul/);
+  assert.throws(() => parsePolicy(judging("  kind: { type: choice, over: request }")), /instructions/);
+  assert.throws(() => parsePolicy(judging("  kind: { type: choice, over: session, instructions: x }")), /over/);
+  assert.throws(() => parsePolicy(judging("  kind: { type: choice, over: request, instructions: x }")), /criteria/);
+  assert.throws(
+    () => parsePolicy(judging("  kind: { type: choice, over: request, instructions: x, criteria: { only: one } }")),
+    /two options/,
+  );
+  assert.throws(
+    () => parsePolicy(judging("  stuck: { type: noul, over: page, instructions: x, criteria: { a: b } }")),
+    /no criteria/,
+  );
+  assert.throws(
+    () => parsePolicy("collect: [snapshot]\njudge:\n  kind: { type: noul, over: request, instructions: x }\nreport: []"),
+    /"requests" or "har"/,
+  );
+  assert.throws(() => parsePolicy(judging("  page: { type: noul, over: page, instructions: x }")), /already a name/);
+  assert.throws(
+    () =>
+      parsePolicy(
+        "collect: [har]\nmeasure:\n  latency: { bad: '>1000' }\njudge:\n  latency: { type: noul, over: page, instructions: x }\nreport: []",
+      ),
+    /already a name/,
+  );
+});
+
+test("a rule reading a judged name runs over that name's items and compares with its criteria", () => {
+  const policy = parsePolicy(
+    judging(
+      "  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }",
+      '\n  - { when: kind == api, title: "{{request.path}}", severity: low }',
+    ),
+  );
+  assert.deepEqual(policy.judgments, [
+    { name: "kind", type: "choice", over: "request", instructions: "x", criteria: { api: "a", asset: "b" } },
+  ]);
+  assert.equal(policy.rules[0].scope, "request");
+  assert.throws(
+    () =>
+      parsePolicy(
+        judging(
+          "  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }",
+          "\n  - { when: kind == script, title: x, severity: low }",
+        ),
+      ),
+    /script.*api, asset/,
+  );
 });

@@ -8,6 +8,7 @@ const facts = {
   console: { errors: [], warnings: [{ text: "careful" }] },
   request: { method: "GET", status: 500 },
   http_status: "server_error",
+  stuck_loading: 0.92,
 };
 
 const holds = (text) => evaluate(parseWhen(text), facts);
@@ -41,8 +42,19 @@ test("not, and, or bind in that order and parentheses override", () => {
   assert.equal(holds("not (console.errors.any and errors.any)"), true);
 });
 
+test("<, <=, > and >= compare a number with a number, and nothing else", () => {
+  assert.equal(holds("stuck_loading > 0.7"), true);
+  assert.equal(holds("stuck_loading > 0.95"), false);
+  assert.equal(holds("stuck_loading >= 0.92"), true);
+  assert.equal(holds("stuck_loading < 0.5"), false);
+  assert.equal(holds("stuck_loading <= 0.92"), true);
+  assert.equal(holds("request.status > 400"), true);
+  assert.equal(holds("page.url > 0"), false);
+  assert.equal(holds("request.missing < 1"), false);
+});
+
 test("a malformed expression is rejected", () => {
-  for (const bad of ["", "errors.any and", "== 5", "errors.any or (", "errors.any errors.any", "a == b == c"]) {
+  for (const bad of ["", "errors.any and", "== 5", "errors.any or (", "errors.any errors.any", "a == b == c", "a > b"]) {
     assert.throws(() => parseWhen(bad), /when/);
   }
 });
