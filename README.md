@@ -90,7 +90,7 @@ It prints `{ status, url, steps, actions, snapshot, out, record, reason }` as JS
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
 
-A goal run does not apply `--policy`. Judge one page with `--max-steps 0`, or leave the goal out and let the policy walk the app.
+A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
 
 ### Recording
 
