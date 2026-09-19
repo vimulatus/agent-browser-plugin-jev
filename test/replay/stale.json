@@ -1,0 +1,70 @@
+{
+  "goal": "open Settings",
+  "pages": "stale",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.9,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.02,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.9, "2": 0.1 },
+          "confidence": 0.9
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.08 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 600, "output_tokens": 28 }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "DONE",
+          "probabilities": {
+            "CLICK": 0.05,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.01,
+            "DONE": 0.9,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 1 },
+          "confidence": 1
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.02 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 560, "output_tokens": 24 }
+    }
+  ]
+}

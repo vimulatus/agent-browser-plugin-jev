@@ -1,0 +1,57 @@
+{
+  "login": [
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]: ••••••\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/settings.html",
+      "title": "Settings",
+      "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
+    }
+  ],
+  "destructive": [
+    {
+      "url": "http://127.0.0.1:8765/account.html",
+      "title": "Account",
+      "snapshot": "- heading \"Account\" [level=1, ref=e1]\n- button \"Delete account\" [ref=e4]\n- link \"Back\" [ref=e2]"
+    }
+  ],
+  "stuck": [
+    {
+      "url": "http://127.0.0.1:8765/report.html",
+      "title": "Report",
+      "snapshot": "- heading \"Report\" [level=1, ref=e1]\n- button \"Retry\" [ref=e4]\n- link \"Back\" [ref=e2]"
+    }
+  ],
+  "stale": [
+    {
+      "url": "http://127.0.0.1:8765/index.html",
+      "title": "Home",
+      "snapshot": "- heading \"Home\" [level=1, ref=e1]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/settings.html",
+      "title": "Settings",
+      "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
+    }
+  ],
+  "search": [
+    {
+      "url": "http://127.0.0.1:8765/search.html",
+      "title": "Search",
+      "snapshot": "- heading \"Search\" [level=1, ref=e1]\n- searchbox \"Search\" [ref=e8]\n- button \"Go\" [ref=e4]"
+    }
+  ]
+}
