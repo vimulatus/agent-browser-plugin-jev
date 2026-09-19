@@ -1,0 +1,70 @@
+{
+  "goal": "delete the account",
+  "pages": "destructive",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.92,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.02,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.92
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.95, "2": 0.05 },
+          "confidence": 0.95
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.96 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "delete",
+          "probabilities": { "delete": 0.9, "send": 0.02, "pay": 0.02, "publish": 0.03, "submit": 0.03 },
+          "confidence": 0.9
+        }
+      },
+      "usage": { "input_tokens": 620, "output_tokens": 30 }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "BLOCKED",
+          "probabilities": {
+            "CLICK": 0.2,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.02,
+            "DONE": 0.06,
+            "BLOCKED": 0.7
+          },
+          "confidence": 0.7
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.9, "2": 0.1 },
+          "confidence": 0.9
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.95 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "delete",
+          "probabilities": { "delete": 0.9, "send": 0.02, "pay": 0.02, "publish": 0.03, "submit": 0.03 },
+          "confidence": 0.9
+        }
+      },
+      "usage": { "input_tokens": 640, "output_tokens": 30 }
+    }
+  ]
+}

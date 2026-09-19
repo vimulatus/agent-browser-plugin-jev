@@ -68,12 +68,18 @@ test("searchbox and spinbutton get TYPE_TEXT and CLICK", () => {
   assert.deepEqual(byRef(login, "e9").operations, ["TYPE_TEXT", "CLICK"]);
 });
 
-test("password fields, headings and disabled elements are left out", () => {
-  assert.equal(login.find((e) => e.ref === "e6"), undefined);
+test("a password field is typeable and marked, so a run masks what it logs", () => {
+  const password = byRef(login, "e6");
+  assert.equal(password.password, true);
+  assert.deepEqual(password.operations, ["TYPE_TEXT", "CLICK"]);
+  const typed = parseSnapshot(fixtureText("snapshot-login-typed.json"));
+  assert.equal(byRef(typed, "e6").password, true);
+  assert.equal(byRef(login, "e5").password, undefined);
+});
+
+test("headings and disabled elements are left out", () => {
   assert.equal(login.find((e) => e.ref === "e1"), undefined);
   assert.equal(widgets.find((e) => e.ref === "e15"), undefined);
-  const typed = parseSnapshot(fixtureText("snapshot-login-typed.json"));
-  assert.equal(typed.find((e) => e.ref === "e6"), undefined);
 });
 
 test("indexes count from 1 in page order", () => {

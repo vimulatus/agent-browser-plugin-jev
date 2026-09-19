@@ -15,6 +15,8 @@ export interface Element {
   role: string;
   label: string;
   value?: string;
+  /** The field hides what it holds, so a run logs a mask instead of the typed value. */
+  password?: boolean;
   checked?: boolean | "mixed";
   expanded?: boolean;
   selected?: boolean;
@@ -66,7 +68,7 @@ function isPassword(line: Line): boolean {
 function operationsFor(line: Line, options: Option[]): Operation[] {
   if (line.attrs.has("disabled")) return [];
   if (line.role === "combobox") return options.length > 0 ? ["SELECT"] : ["TYPE_TEXT", "CLICK"];
-  if (TYPE_ROLES.has(line.role)) return isPassword(line) ? [] : ["TYPE_TEXT", "CLICK"];
+  if (TYPE_ROLES.has(line.role)) return ["TYPE_TEXT", "CLICK"];
   if (CLICK_ROLES.has(line.role)) return ["CLICK"];
   return [];
 }
@@ -97,6 +99,7 @@ export function parseSnapshot(text: string): Element[] {
 
     const element: Element = { index, ref: String(line.attrs.get("ref")), role: line.role, label: line.name.trim(), operations };
     if (line.value !== undefined) element.value = line.value;
+    if (TYPE_ROLES.has(line.role) && isPassword(line)) element.password = true;
     const checked = flag(line.attrs, "checked");
     if (checked !== undefined) element.checked = checked;
     const expanded = flag(line.attrs, "expanded");

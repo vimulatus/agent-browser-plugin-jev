@@ -42,6 +42,12 @@ interface Snapshot {
   snapshot: string;
 }
 
+/** The hash alone, through one agent-browser call, to check the page has not moved under a decision. */
+export async function snapshotHash(browser: AgentBrowser): Promise<string> {
+  const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as Snapshot;
+  return pageHash(snapshot.origin, snapshot.snapshot);
+}
+
 /** Reads the page through five agent-browser calls and returns one Observation. */
 export async function observe(browser: AgentBrowser): Promise<Observation> {
   const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as Snapshot;

@@ -1,0 +1,102 @@
+{
+  "goal": "open the report",
+  "pages": "stuck",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.9,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.02,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.85, "2": 0.15 },
+          "confidence": 0.85
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.05 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 600, "output_tokens": 28 }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.88,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.04,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.88
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.8, "2": 0.2 },
+          "confidence": 0.8
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.05 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 610, "output_tokens": 28 }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.86,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.06,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.86
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 0.75, "2": 0.25 },
+          "confidence": 0.75
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.05 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 620, "output_tokens": 28 }
+    }
+  ]
+}

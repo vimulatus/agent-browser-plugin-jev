@@ -1,0 +1,51 @@
+{
+  "goal": "open the report for 2024",
+  "pages": "search",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "TYPE_TEXT",
+          "probabilities": {
+            "CLICK": 0.1,
+            "TYPE_TEXT": 0.8,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.02,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.8
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "2",
+          "probabilities": { "1": 0.3, "2": 0.7 },
+          "confidence": 0.7
+        },
+        "type_text_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": { "1": 1 },
+          "confidence": 1
+        },
+        "type_text_value": {
+          "type": "choice",
+          "choice": "NONE",
+          "probabilities": { "2024": 0.3, "NONE": 0.7 },
+          "confidence": 0.7
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.05 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": { "delete": 0.05, "send": 0.1, "pay": 0.05, "publish": 0.05, "submit": 0.75 },
+          "confidence": 0.75
+        }
+      },
+      "usage": { "input_tokens": 580, "output_tokens": 30 }
+    }
+  ]
+}
