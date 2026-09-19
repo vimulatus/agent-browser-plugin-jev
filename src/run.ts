@@ -59,6 +59,7 @@ interface Step {
   confidence: number;
   probabilities: Record<string, number>;
   targetProbabilities: Record<string, number>;
+  valueProbabilities: Record<string, number>;
   destructive: Decision["destructive"];
   latencyMs: number;
   usage: Record<string, number>;
@@ -196,6 +197,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         confidence: decision.confidence,
         probabilities: decision.probabilities,
         targetProbabilities: decision.targetProbabilities,
+        valueProbabilities: decision.valueProbabilities,
         destructive: decision.destructive,
         latencyMs: decision.latencyMs,
         usage: decision.usage,
