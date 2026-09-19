@@ -72,3 +72,16 @@ test("a policy with no judge section writes no inferred.jsonl", async () => {
     ["POST /analytics/beacon took 1202 ms", "GET /api/products took 2504 ms"],
   );
 });
+
+test("--out names a directory the run creates, so a path that does not exist yet still gets the answers", async () => {
+  const out = join(mkdtempSync(join(tmpdir(), "jev-out-")), "run-1", "answers");
+  const judged = await judgePage({
+    session: "perf",
+    policyPath: "perf",
+    out,
+    jev: { ask: async () => RECORDED.answers },
+  });
+
+  assert.equal(judged.inferred, join(out, "inferred.jsonl"));
+  assert.equal(readFileSync(judged.inferred, "utf8").trim().split("\n").length, 5);
+});

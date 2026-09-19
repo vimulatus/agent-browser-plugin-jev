@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentBrowser } from "../agent-browser.js";
@@ -51,6 +51,7 @@ export function judgePageOptions(argv: string[]): JudgePageOptions | null {
 }
 
 function writeInferred(inferences: Inference[], out: string): string {
+  mkdirSync(out, { recursive: true });
   const path = join(out, "inferred.jsonl");
   writeFileSync(path, inferences.map((inference) => JSON.stringify(inference)).join("\n") + "\n");
   return path;
