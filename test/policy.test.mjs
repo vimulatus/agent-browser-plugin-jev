@@ -169,7 +169,7 @@ test("a rule reading a judged name runs over that name's items and compares with
     ),
   );
   assert.deepEqual(policy.judgments, [
-    { name: "kind", type: "choice", over: "request", instructions: "x", criteria: { api: "a", asset: "b" } },
+    { name: "kind", type: "choice", over: "request", instructions: ["x"], criteria: { api: "a", asset: "b" } },
   ]);
   assert.equal(policy.rules[0].scope, "request");
   assert.throws(
@@ -181,5 +181,52 @@ test("a rule reading a judged name runs over that name's items and compares with
         ),
       ),
     /script.*api, asset/,
+  );
+});
+
+test("instructions may name what the browser showed, and nothing a rule works out later", () => {
+  const policy = parsePolicy(
+    'collect: [snapshot]\njudge:\n  worked: { type: noul, over: page, instructions: "did {{action.label}} work" }\nreport: []',
+  );
+  assert.deepEqual(policy.judgments[0].instructions, ["did ", ["action", "label"], " work"]);
+  assert.throws(
+    () => parsePolicy(judging('  kind: { type: noul, over: page, instructions: "{{latency}} ms" }')),
+    /instructions name "latency"/,
+  );
+  assert.throws(
+    () => parsePolicy(judging('  kind: { type: noul, over: page, instructions: "{{request.url}}" }')),
+    /over page cannot name "request.url"/,
+  );
+  assert.throws(
+    () => parsePolicy('collect: [console]\njudge:\n  kind: { type: noul, over: page, instructions: "{{page.url}}" }\nreport: []'),
+    /page.*collect/,
+  );
+});
+
+const rating = (report) =>
+  `collect: [errors, snapshot]
+judge:
+  severity:
+    type: choice
+    over: finding
+    instructions: what does this cost the user
+    criteria: { high: it blocks the user, low: it is cosmetic }
+report: ${report}`;
+
+test("severity judged over the findings is the only question over finding, and no rule sets a severity too", () => {
+  const policy = parsePolicy(rating('\n  - { when: errors.any, title: "{{page.url}} broke" }'));
+  assert.equal(policy.judgments[0].over, "finding");
+  assert.equal(policy.rules[0].severity, undefined);
+  assert.throws(
+    () => parsePolicy(rating("\n  - { when: errors.any, title: x, severity: high }")),
+    /severity is judged over every finding/,
+  );
+  assert.throws(
+    () => parsePolicy(rating("[]").replace("severity:", "how_bad:")),
+    /over finding is read as the "severity"/,
+  );
+  assert.throws(
+    () => parsePolicy(rating("[]").replace("type: choice", "type: noul")),
+    /over finding must be a choice/,
   );
 });

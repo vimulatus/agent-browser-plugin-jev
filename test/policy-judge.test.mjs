@@ -44,7 +44,7 @@ const products = await observe(
 const har = readHar(`${PERF}capture.har`);
 
 const jev = replay(RECORDED.answers);
-const inferences = await judge(perf, products, har, jev);
+const inferences = await judge(perf, products, { har }, jev);
 
 test("over: request asks one question per request and over: page asks one about the page", () => {
   assert.deepEqual(Object.keys(jev.asked.questions), [
@@ -151,7 +151,7 @@ test("a policy with no judge section makes no Jev call", async () => {
       throw new Error("the errors policy must not ask Jev anything");
     },
   };
-  assert.deepEqual(await judge(loadPolicy("errors"), products, undefined, refuse), []);
+  assert.deepEqual(await judge(loadPolicy("errors"), products, {}, refuse), []);
 });
 
 test("over: element asks one question per element of the snapshot", async () => {
@@ -180,7 +180,7 @@ report:
     login.elements.map((element, index) => [`is_destructive#${index}`, { type: "noul", noul: element.role === "button" ? 0.9 : 0.01 }]),
   );
   const asked = replay(answers);
-  const judged = await judge(policy, login, undefined, asked);
+  const judged = await judge(policy, login, {}, asked);
 
   assert.equal(Object.keys(asked.asked.questions).length, login.elements.length);
   assert.deepEqual(Object.keys(asked.asked.state), ["page", "elements"]);
