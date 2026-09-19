@@ -1,0 +1,25 @@
+name: perf
+collect: [har, snapshot]
+measure:
+  latency: { good: "<200", ok: "200-1000", bad: ">1000" }
+judge:
+  request_kind:
+    type: choice
+    over: request
+    instructions: What does this request fetch for the page the user is looking at?
+    criteria:
+      content_for_this_page: data the page shows now
+      asset: script, style, font or image
+      analytics: tracking or telemetry
+      third_party: a domain the app does not own
+  stuck_loading:
+    type: noul
+    over: page
+    instructions: Does the page show a spinner or a skeleton with no content in its place?
+report:
+  - when: latency == bad and request_kind == content_for_this_page
+    title: "{{request.method}} {{request.path}} took {{request.time}} ms"
+    severity: high
+  - when: stuck_loading > 0.7
+    title: "{{page.url}} is still loading"
+    severity: medium

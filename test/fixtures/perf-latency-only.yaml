@@ -1,0 +1,7 @@
+collect: [har]
+measure:
+  latency: { good: "<200", ok: "200-1000", bad: ">1000" }
+report:
+  - when: latency == bad
+    title: "{{request.method}} {{request.path}} took {{request.time}} ms"
+    severity: high

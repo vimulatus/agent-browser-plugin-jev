@@ -7,16 +7,25 @@ import { formatPath, type Path } from "./path.js";
 import { parseBuckets, type Buckets } from "./range.js";
 import { parseTemplate, pathsOf as pathsOfTemplate, type Template } from "./template.js";
 
-export const COLLECTIONS = ["console", "errors", "requests", "snapshot"] as const;
+export const COLLECTIONS = ["console", "errors", "har", "requests", "snapshot"] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
-/** `page` rules fire once per observation; `request` rules once per request. */
-export type Scope = "page" | "request";
+/** What one rule or question runs over: the whole page once, or each request or each element in turn. */
+export type Scope = "page" | "request" | "element";
 
 export interface Measure {
   scope: Scope;
   buckets: Buckets;
-  read: (facts: Facts) => number | null;
+  read: (facts: Facts) => number | null | undefined;
+}
+
+/** One question the policy puts to Jev, fanned out over every item of its scope. */
+export interface Judgment {
+  name: string;
+  type: "choice" | "noul";
+  over: Scope;
+  instructions: string;
+  criteria?: Record<string, string>;
 }
 
 export interface Rule {
@@ -27,29 +36,42 @@ export interface Rule {
   evidence: { key: string; path: Path };
 }
 
-/** A loaded policy: what to collect, which numbers to bucket, and the rules that make findings. */
+/** A loaded policy: what to collect, which numbers to bucket, what to ask Jev, and the rules that make findings. */
 export interface Policy {
   name?: string;
   collect: Collection[];
   measures: Record<string, Measure>;
+  judgments: Judgment[];
   rules: Rule[];
 }
 
-const SECTIONS = ["name", "collect", "measure", "report"];
+const SECTIONS = ["name", "collect", "measure", "judge", "report"];
 const RULE_FIELDS = ["when", "title", "severity"];
+const JUDGMENT_FIELDS = ["type", "over", "instructions", "criteria"];
+const SCOPES: Scope[] = ["page", "request", "element"];
+
+/** A name a `when` or a `title` can start from: what must be collected, what it runs over, what it compares with. */
+interface Readable {
+  collections: Collection[];
+  scope: Scope;
+  values?: string[];
+}
 
 /** The numbers a policy may bucket, each read from the facts of its scope. */
-const MEASURABLE: Record<string, { collection: Collection; scope: Scope; read: Measure["read"] }> = {
-  http_status: { collection: "requests", scope: "request", read: (facts) => facts.request!.status },
+const MEASURABLE: Record<string, Readable & { read: Measure["read"] }> = {
+  http_status: { collections: ["requests", "har"], scope: "request", read: (facts) => facts.request!.status },
+  latency: { collections: ["har"], scope: "request", read: (facts) => facts.request!.time },
 };
 
-/** The roots a path may start from, with the collection that fills them. */
-const ROOTS: Record<string, { collection: Collection; scope: Scope }> = {
-  page: { collection: "snapshot", scope: "page" },
-  console: { collection: "console", scope: "page" },
-  errors: { collection: "errors", scope: "page" },
-  requests: { collection: "requests", scope: "page" },
-  request: { collection: "requests", scope: "request" },
+/** The roots a path may start from, with the collections that can fill them. */
+const ROOTS: Record<string, Readable> = {
+  page: { collections: ["snapshot"], scope: "page" },
+  console: { collections: ["console"], scope: "page" },
+  errors: { collections: ["errors"], scope: "page" },
+  requests: { collections: ["requests", "har"], scope: "page" },
+  request: { collections: ["requests", "har"], scope: "request" },
+  elements: { collections: ["snapshot"], scope: "page" },
+  element: { collections: ["snapshot"], scope: "element" },
 };
 
 /** The lists a page rule can read, and the evidence key their first item gets. */
@@ -59,6 +81,7 @@ const EVIDENCE: { prefix: Path; key: string }[] = [
   { prefix: ["console", "errors"], key: "console" },
   { prefix: ["console", "warnings"], key: "console" },
   { prefix: ["requests"], key: "request" },
+  { prefix: ["elements"], key: "element" },
 ];
 
 const POLICIES_DIR = fileURLToPath(new URL("../../policies/", import.meta.url));
@@ -95,9 +118,13 @@ export function parsePolicy(text: string, source = "policy"): Policy {
   for (const item of collect) {
     if (!COLLECTIONS.includes(item)) fail(`collect: "${item}" is not one of ${COLLECTIONS.join(", ")}`);
   }
-  const collected = (collection: Collection, reader: string) => {
-    if (!collect.includes(collection)) fail(`${reader} needs "${collection}" in collect`);
+  const collected = (collections: Collection[], reader: string) => {
+    if (!collections.some((collection) => collect.includes(collection))) {
+      fail(`${reader} needs ${collections.map((c) => `"${c}"`).join(" or ")} in collect`);
+    }
   };
+
+  const readables: Record<string, Readable> = { ...ROOTS };
 
   const measures: Record<string, Measure> = {};
   if (doc.measure !== undefined) {
@@ -105,11 +132,26 @@ export function parsePolicy(text: string, source = "policy"): Policy {
     for (const [name, spec] of Object.entries(doc.measure)) {
       const measurable = MEASURABLE[name];
       if (!measurable) fail(`measure: "${name}" is not measurable; known: ${Object.keys(MEASURABLE).join(", ")}`);
-      collected(measurable.collection, `measure ${name}`);
+      collected(measurable.collections, `measure ${name}`);
       if (!isRecord(spec) || Object.values(spec).some((r) => typeof r !== "string")) {
         return fail(`measure ${name}: buckets must map a name to a range`);
       }
-      measures[name] = { ...measurable, buckets: parseBuckets(spec as Record<string, string>) };
+      const buckets = parseBuckets(spec as Record<string, string>);
+      measures[name] = { scope: measurable.scope, buckets, read: measurable.read };
+      readables[name] = { ...measurable, values: buckets.map((bucket) => bucket.name) };
+    }
+  }
+
+  const judgments: Judgment[] = [];
+  if (doc.judge !== undefined) {
+    if (!isRecord(doc.judge)) return fail("judge must map a name to its question");
+    for (const [name, spec] of Object.entries(doc.judge)) {
+      if (readables[name]) fail(`judge: "${name}" is already a name a rule can read`);
+      const judgment = parseJudgment(name, spec, (message) => fail(`judge ${name}: ${message}`));
+      const { collections } = ROOTS[judgment.over];
+      collected(collections, `judge ${name}: over ${judgment.over}`);
+      judgments.push(judgment);
+      readables[name] = { collections, scope: judgment.over, values: judgment.criteria && Object.keys(judgment.criteria) };
     }
   }
 
@@ -125,17 +167,18 @@ export function parsePolicy(text: string, source = "policy"): Policy {
 
     let scope: Scope = "page";
     for (const path of [...pathsOfWhen(when), ...pathsOfTemplate(title)]) {
-      const root = String(path[0]);
-      const reads = ROOTS[root] ?? measures[root];
-      if (!reads) fail(`${where}: "${formatPath(path)}" starts from nothing collected or measured`);
-      const collection = "collection" in reads ? reads.collection : MEASURABLE[root].collection;
-      collected(collection, `${where}: "${formatPath(path)}"`);
-      if (reads.scope === "request") scope = "request";
+      const reads = readables[String(path[0])];
+      if (!reads) fail(`${where}: "${formatPath(path)}" starts from nothing collected, measured or judged`);
+      collected(reads.collections, `${where}: "${formatPath(path)}"`);
+      if (reads.scope !== "page" && reads.scope !== scope && scope !== "page") {
+        fail(`${where}: a rule cannot run over ${scope} and ${reads.scope} at once`);
+      }
+      if (reads.scope !== "page") scope = reads.scope;
     }
     for (const expression of comparisons(when)) {
-      const measure = expression.path.length === 1 ? measures[expression.path[0]] : undefined;
-      if (measure && !measure.buckets.some((b) => b.name === expression.value)) {
-        fail(`${where}: "${expression.value}" is not a bucket of ${expression.path[0]}`);
+      const values = expression.path.length === 1 ? readables[expression.path[0]]?.values : undefined;
+      if (values && (expression.op === "==" || expression.op === "!=") && !values.includes(String(expression.value))) {
+        fail(`${where}: "${expression.value}" is not one of ${expression.path[0]}: ${values.join(", ")}`);
       }
     }
 
@@ -144,11 +187,36 @@ export function parsePolicy(text: string, source = "policy"): Policy {
       title,
       severity: entry.severity as string,
       scope,
-      evidence: scope === "request" ? { key: "request", path: ["request"] } : pageEvidence(pathsOfWhen(when)),
+      evidence: scope === "page" ? pageEvidence(pathsOfWhen(when)) : { key: scope, path: [scope] },
     };
   });
 
-  return { name: doc.name as string | undefined, collect, measures, rules };
+  return { name: doc.name as string | undefined, collect, measures, judgments, rules };
+}
+
+function parseJudgment(name: string, spec: unknown, fail: (message: string) => never): Judgment {
+  if (!isRecord(spec)) return fail("expected type, over and instructions");
+  for (const key of Object.keys(spec)) if (!JUDGMENT_FIELDS.includes(key)) fail(`unknown field "${key}"`);
+  if (spec.type !== "choice" && spec.type !== "noul") fail(`type must be "choice" or "noul"`);
+  if (!SCOPES.includes(spec.over as Scope)) fail(`over must be one of ${SCOPES.join(", ")}`);
+  if (typeof spec.instructions !== "string" || spec.instructions.trim() === "") {
+    fail("instructions must say what Jev decides");
+  }
+  const judgment: Judgment = {
+    name,
+    type: spec.type,
+    over: spec.over as Scope,
+    instructions: spec.instructions,
+  };
+  if (spec.type === "noul") {
+    if (spec.criteria !== undefined) fail("a noul answers its instructions on its own and takes no criteria");
+    return judgment;
+  }
+  if (!isRecord(spec.criteria) || Object.values(spec.criteria).some((v) => typeof v !== "string")) {
+    return fail("criteria must map each option to what it means");
+  }
+  if (Object.keys(spec.criteria).length < 2) fail("criteria must offer at least two options");
+  return { ...judgment, criteria: spec.criteria as Record<string, string> };
 }
 
 function comparisons(expression: Expression): Extract<Expression, { kind: "compare" }>[] {

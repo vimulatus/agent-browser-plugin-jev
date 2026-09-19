@@ -1,21 +1,40 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { agentBrowser } from "../agent-browser.js";
 import { observe } from "../observe.js";
 import { applyPolicy, type Finding } from "./apply.js";
+import { recordHar } from "./har.js";
+import { judge, type Inference } from "./judge.js";
+import { typesafeJev, type Jev } from "./jev.js";
 import { loadPolicy } from "./load.js";
 
 export interface JudgePageOptions {
   session: string;
   policyPath: string;
+  out?: string;
+  jev?: Jev;
+}
+
+/** The findings, and where the answers Jev gave were written when the policy judged. */
+export interface Judged {
+  findings: Finding[];
+  inferred?: string;
 }
 
 /** `run --policy <file> --max-steps 0`: observe the current page once and apply the policy. */
-export async function judgePage({ session, policyPath }: JudgePageOptions): Promise<{ findings: Finding[] }> {
+export async function judgePage({ session, policyPath, out, jev }: JudgePageOptions): Promise<Judged> {
   const policy = loadPolicy(policyPath);
-  const observation = await observe(agentBrowser(session));
-  return { findings: applyPolicy(policy, observation) };
+  const browser = agentBrowser(session);
+  const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
+  const observation = await observe(browser);
+  const inferences = await judge(policy, observation, har, jev ?? typesafeJev());
+  const findings = applyPolicy(policy, observation, { har, inferences });
+  if (inferences.length === 0) return { findings };
+  return { findings, inferred: writeInferred(inferences, out ?? mkdtempSync(join(tmpdir(), "jev-"))) };
 }
 
-/** The options when argv is `run --policy <file> --max-steps 0 [--session <name>]`, else null. */
+/** The options when argv is `run --policy <file> --max-steps 0 [--session <name>] [--out <dir>]`, else null. */
 export function judgePageOptions(argv: string[]): JudgePageOptions | null {
   if (argv[0] !== "run") return null;
   const option = (name: string) => {
@@ -24,5 +43,15 @@ export function judgePageOptions(argv: string[]): JudgePageOptions | null {
   };
   const policyPath = option("--policy");
   if (policyPath === undefined || option("--max-steps") !== "0") return null;
-  return { session: option("--session") ?? process.env.AGENT_BROWSER_SESSION ?? "default", policyPath };
+  return {
+    session: option("--session") ?? process.env.AGENT_BROWSER_SESSION ?? "default",
+    policyPath,
+    out: option("--out"),
+  };
+}
+
+function writeInferred(inferences: Inference[], out: string): string {
+  const path = join(out, "inferred.jsonl");
+  writeFileSync(path, inferences.map((inference) => JSON.stringify(inference)).join("\n") + "\n");
+  return path;
 }

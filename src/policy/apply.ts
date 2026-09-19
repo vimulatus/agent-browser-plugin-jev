@@ -1,6 +1,7 @@
 import type { Observation } from "../observe.js";
 import { evaluate } from "./expression.js";
-import { pageFacts, type Facts } from "./facts.js";
+import { pageFacts, type Facts, type RequestFact } from "./facts.js";
+import type { Inference } from "./judge.js";
 import type { Policy, Scope } from "./load.js";
 import { lookup } from "./path.js";
 import { bucketOf } from "./range.js";
@@ -13,13 +14,23 @@ export interface Finding {
   evidence: Record<string, unknown>;
 }
 
+/** What the policy gathered around the observation: the HAR it recorded, and the answers Jev gave. */
+export interface Gathered {
+  har?: RequestFact[];
+  inferences?: Inference[];
+}
+
 /** Runs every rule of the policy over one observation. Pure: no browser, no Jev. */
-export function applyPolicy(policy: Policy, observation: Observation): Finding[] {
-  const page = pageFacts(observation);
+export function applyPolicy(policy: Policy, observation: Observation, gathered: Gathered = {}): Finding[] {
+  const page = pageFacts(observation, gathered.har);
   const scopes: Record<Scope, Facts[]> = {
     page: [measured(policy, page, "page")],
     request: page.requests.map((request) => measured(policy, { ...page, request }, "request")),
+    element: page.elements.map((element) => measured(policy, { ...page, element }, "element")),
   };
+  for (const inference of gathered.inferences ?? []) {
+    scopes[inference.over][inference.index][inference.question] = inference.answer;
+  }
   return policy.rules.flatMap((rule) =>
     scopes[rule.scope]
       .filter((facts) => evaluate(rule.when, facts))
