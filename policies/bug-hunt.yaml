@@ -1,0 +1,42 @@
+name: bug-hunt
+collect: [console, content, errors, requests, snapshot]
+measure:
+  http_status: { ok: "<400", client_error: "400-499", server_error: ">=500" }
+  page_unchanged_after_click: { "yes": ">0", "no": "<1" }
+judge:
+  page_shows_error_to_user:
+    type: noul
+    over: page
+    instructions: Does the page itself show the user an error, a failure, or an empty state where content belongs? A message in the console is not shown to the user.
+  outcome_matches_action:
+    type: choice
+    over: page
+    instructions: 'The user just did {{action.kind}} on "{{action.label}}". Does the page now show what that promises?'
+    criteria:
+      expected: the page shows the result of the action
+      nothing: the page shows what it showed before the action
+      wrong: the page changed into something other than the result the action promises
+  stuck_loading:
+    type: noul
+    over: page
+    instructions: Does the page show a spinner or a skeleton with no content in its place?
+  severity:
+    type: choice
+    over: finding
+    instructions: What does this finding cost the person using the app?
+    criteria:
+      critical: it blocks a core workflow, loses data, or crashes the page
+      high: it makes a feature unusable and no workaround is in reach
+      medium: a workaround exists, or the page shows the user a visible problem
+      low: it is cosmetic
+report:
+  - when: page_unchanged_after_click == yes and outcome_matches_action == nothing
+    title: "Clicking {{action.label}} on {{page.path}} does nothing"
+  - when: outcome_matches_action == wrong
+    title: "Clicking {{action.label}} on {{page.path}} does not show what a user expects"
+  - when: http_status == server_error
+    title: "{{request.method}} {{request.path}} returned {{request.status}}"
+  - when: page_shows_error_to_user > 0.7
+    title: "{{page.path}} shows the user an error"
+  - when: stuck_loading > 0.7
+    title: "{{page.path}} shows no content while it loads"
