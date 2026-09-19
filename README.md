@@ -1,13 +1,73 @@
 # agent-browser-plugin-jev
 
-An [agent-browser](https://github.com/vercel-labs/agent-browser) plugin. Give it one goal or one policy, and [Jev](https://docs.typesafe.ai) picks each action and classifies what the browser shows.
+An [agent-browser](https://github.com/vercel-labs/agent-browser) plugin. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
 
-Install it with `agent-browser plugin add vimulatus/agent-browser-plugin-jev`. The plan is at [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/issues/1).
+The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/issues/1).
 
-## run
+## Install
+
+You need Node 20 or newer, the `agent-browser` binary on PATH, and a TypeSafe API key.
+
+### From any directory
+
+Clone, build and link the command, then register it once for the machine:
+
+```bash
+git clone https://github.com/vimulatus/agent-browser-plugin-jev
+cd agent-browser-plugin-jev
+pnpm install && pnpm build && npm link
+```
+
+Put this in `~/.agent-browser/config.json`:
+
+```json
+{
+  "plugins": [
+    {
+      "name": "jev",
+      "command": "agent-browser-plugin-jev",
+      "capabilities": ["command.run", "jev.run", "jev.status"]
+    }
+  ]
+}
+```
+
+The plugin answers from any directory once that file is there:
+
+```bash
+agent-browser plugin run jev jev.status --payload '{"runId":"x"}'
+# Plugin 'jev' failed: no run x
+```
+
+After a `git pull`, run `pnpm build` again. The linked command runs `dist/`, and only the build writes it.
+
+### In one project
+
+```bash
+agent-browser plugin add vimulatus/agent-browser-plugin-jev
+```
+
+This writes `./agent-browser.json` in the current directory, so every project registers the plugin again, and it registers the command as `npx -y github:vimulatus/agent-browser-plugin-jev`. In a project whose `package.json` pins a package manager other than npm through `devEngines`, npm refuses to run anything and the plugin never starts:
+
+```
+Plugin 'jev' exited unsuccessfully.
+npm error code EBADDEVENGINES
+npm error EBADDEVENGINES Invalid name "bun" does not match "npm" for "packageManager"
+```
+
+`plugin add --global` writes the same `npx` command into `~/.agent-browser/config.json` and fails the same way. In a bun or yarn project, install from any directory instead.
+
+### The key
 
 ```bash
 export TYPESAFE_API_KEY=...
+```
+
+Export it in the shell that runs `agent-browser`: the plugin reads the environment it inherits. A policy with no `judge` section asks Jev nothing and needs no key.
+
+## Run a goal
+
+```bash
 export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix jev)"
 agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
@@ -15,75 +75,120 @@ agent-browser-plugin-jev run "log in as alice@example.com with password secret a
 
 It prints `{ status, url, steps, actions, snapshot, out, record, reason }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked.
 
-| Flag | What it does |
-|---|---|
-| `--url <url>` | Opens this page before the first step |
-| `--session <name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION` |
-| `--max-steps <n>` | Stops after n steps; default 60 |
-| `--out <dir>` | Where the run writes its artifacts; default a fresh directory under the temp dir |
-| `--allow <verbs>` | Lets the run delete, send, pay, publish, submit; or `all` |
-| `--model <name>` | The System One model; default `jev-latest` |
-| `--policy <file>` | Judges every step against this policy, by path or by shipped name |
-| `--fixtures <file>` | The values a walk types into forms; replaces or adds a built-in key |
-| `--record <file>` | Records the run to this `.webm` or `.mp4`, cursor included |
-| `--human` | Moves the pointer along a curve instead of jumping to each target |
+| Flag | Value | What it does |
+|---|---|---|
+| `--url` | `<url>` | Opens this page before the first step |
+| `--session` | `<name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION` |
+| `--max-steps` | `<n>` | Stops after n steps; default 60. `0` judges the page and moves nothing |
+| `--out` | `<dir>` | Where the run writes its artifacts; default a fresh directory under the temp dir |
+| `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, comma separated, or `all` |
+| `--model` | `<name>` | The System One model; default `jev-latest` |
+| `--policy` | `<file>` | The policy to judge with, by path or by shipped name |
+| `--fixtures` | `<file>` | The values a walk types into forms; replaces a built-in key or adds one |
+| `--record` | `<file>` | Records the run to this `.webm` or `.mp4`, cursor included |
+| `--human` | | Moves the pointer along a curve instead of jumping to each target |
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
 
-The run writes `observed.jsonl` (the page at every step), `inferred.jsonl` (the decision at every step, executed or not) and `status.json` to `--out`.
+A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
 
-### Recording the run
+### Recording
 
 ```bash
 agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html --record ./login.webm --human
 ```
 
-`--record` starts `record start <file> --cursor` once the start page is open and stops it after the last step, and the result names the file. `--human` sets `--input-mode human` on every agent-browser call and clicks with `--human`, so the pointer eases from target to target. Neither flag sleeps: the CLI's own movement timing sets the pace. Recording needs ffmpeg on PATH — `agent-browser doctor` says whether you have it.
+`--record` starts `record start <file> --cursor` once the start page is open and stops it after the last step, and the result names the file. `--human` sets `--input-mode human` on every agent-browser call and clicks with `--human`, so the pointer eases from target to target. Neither flag sleeps: agent-browser's own movement timing sets the pace. Recording needs ffmpeg on PATH, and `agent-browser doctor` says whether you have it.
 
-## As a plugin
+## Judge one page
 
-Once `agent-browser plugin add` has registered it, an agent starts the same run through the protocol:
-
-```bash
-agent-browser plugin run jev jev.run --payload '{"goal":"open the settings page","wait":true}'
-agent-browser plugin run jev jev.status --payload '{"runId":"jev-run-2f9c1d40aa"}'
-```
-
-`jev.run` takes `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, out, wait }` and starts `run` as a detached worker, so a run outlives agent-browser's 60 s plugin timeout. It answers `{ runId, out, status: "running" }` at once; `wait: true` holds the answer for up to 55 s and returns the run's final status when it ends in time, and `wait: <milliseconds>` holds it for less.
-
-`jev.status` takes `{ runId }` or `{ out }` and answers with the run's `status.json`: `{ status, url, steps, actions, reason, ... }`, where `status` is `running`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed` with the last line of `<out>/worker.log`.
-
-The session comes from the payload, else from `$AGENT_BROWSER_SESSION` in the environment agent-browser passes down. Anything that goes wrong answers `{ success: false, error }`, and nothing but JSON reaches stdout.
-
-## Checked by hand
-
-The paid API is never called from the test suite, so one check stays manual. It needs a real `TYPESAFE_API_KEY`.
+`--max-steps 0` observes the page the session is on, applies the policy once and moves nothing:
 
 ```bash
-# 1. serve a login fixture that asks for an email and a password, and shows Settings after sign-in
-# 2. run the goal against it
-agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
-  --url http://127.0.0.1:8765/login.html --session jev-manual
-# 3. expect status "done", url ending /settings.html, and three actions in inferred.jsonl
-# 4. record the same run and play the file: the cursor curves from field to field
-agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
-  --url http://127.0.0.1:8765/login.html --session jev-manual --record ./login.webm --human
+agent-browser --session jev-check open http://127.0.0.1:8765/orders.html
+agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-check
 ```
 
-This check has not been run yet. The flags it drives were checked against agent-browser 0.38.1 without Jev, by filling the same fixture through the plugin's own command builder: `--input-mode human`, `record start <file> --cursor` and `click --human` produce a playable VP8 `.webm` with a visible cursor that eases between targets.
+It prints `{ findings, inferred }`: the findings the rules raised, and the path of the file holding every answer Jev gave. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
 
-The replayed Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
-## Policies
+## Walk an app
 
-A policy is a YAML file with four sections. `errors.yaml` and `perf.yaml` ship with the plugin, so `--policy perf` finds one by name.
+With a policy and no goal, `run` walks the app on its own: it tries every control it finds once, applies the policy after every step, and writes down what it found.
 
-- `collect` — what to gather: `console`, `errors`, `requests`, `snapshot`, `har`. `har` records one over a reload of the page, so every request the page makes is timed.
-- `measure` — the numbers code buckets, because Jev does not compare numbers. `http_status` and `latency` today.
-- `judge` — the questions Jev answers.
-- `report` — the rules that turn all of it into findings.
+```bash
+agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+```
 
-`judge` fans each question out over `page`, `request` or `element`: one question per item, all of them in one Jev request. A choice answers with one of its criteria, a noul with a probability, and `report.when` reads either:
+Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
+
+The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+
+A policy that collects `har` cannot walk, because a HAR is recorded over a reload of the page. Judge one page with `--max-steps 0` instead.
+
+### Test data
+
+An editable field is filled from a fixture dictionary. The built-in keys are `email`, `password`, `name`, `phone` and `address`. `--fixtures <file>` takes a YAML mapping that replaces a key or adds one:
+
+```yaml
+email: qa@acme.test
+company: Acme Ltd
+```
+
+Jev picks the key per field, with a `NONE` option for a field no value fits. Nothing is typed unless the chosen key is over 0.5, and every field left empty lands in `unfilled.json` with its label and its page.
+
+### The replay behind a finding
+
+A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`.
+
+The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. That session starts cold, with none of the walk's cookies or storage, so a finding several screens past a login may not reproduce. It is closed when the walk ends, and every act in it is human-paced whether or not the walk is: the recording is evidence someone watches. It needs ffmpeg on PATH.
+
+## Policy files
+
+A policy is a YAML file with four sections under an optional `name`. `--policy` takes a path, or the name of a policy that ships with the plugin.
+
+### collect
+
+What to gather at every step. Every name a rule or a question reads has to be collected, or the policy is refused when it loads.
+
+| Name | What it gathers |
+|---|---|
+| `console` | Every console message, split into `console.messages`, `console.errors` and `console.warnings` |
+| `errors` | The errors the page threw |
+| `requests` | The requests the page made, without their duration |
+| `snapshot` | The page's controls, its URL and its title |
+| `content` | The whole page text, so Jev reads the banners and labels `snapshot` drops |
+| `har` | One HAR over a reload, so every request carries `time` in ms |
+
+### measure
+
+Jev does not compare numbers, so code buckets them. Each name maps bucket names to ranges, and a fact falls into the first bucket whose range holds it. A range is `<n`, `<=n`, `>n`, `>=n` or the inclusive `a-b`.
+
+| Name | What it reads | Needs |
+|---|---|---|
+| `http_status` | The status of each request | `requests` or `har` |
+| `latency` | The duration of each request, in ms | `har` |
+| `page_unchanged_after_click` | `1` when the click left the page as it was, `0` when it changed it | `snapshot`, and a walk to click |
+
+```yaml
+measure:
+  latency: { good: "<200", ok: "200-1000", bad: ">1000" }
+```
+
+A fact no bucket holds has no value, and a rule that compares it does not fire.
+
+### judge
+
+The questions Jev answers. `over` says what each question runs over, one question per item, all of them in one request:
+
+- `page`, once per step.
+- `request`, once per request collected.
+- `element`, once per control on the page.
+- `finding`, once per finding the rules raised, after they have raised them.
+
+A `choice` answers with one of its `criteria`, which need at least two options. A `noul` answers with a probability between 0 and 1 and takes no criteria. `instructions` can name what the browser showed with `{{ }}`, and a question over one scope cannot name another: a question `over: request` cannot read `{{element.label}}`.
+
+`over: finding` is read as the severity of every finding, so it only works under the name `severity`, only as a `choice`, and one criterion per level. A policy that judges `severity` forbids its rules to set one, and a policy that does not judge it makes every rule set one.
 
 ```yaml
 judge:
@@ -98,6 +203,17 @@ judge:
     type: noul
     over: page
     instructions: Does the page show a spinner or a skeleton with no content in its place?
+```
+
+### report
+
+The rules that turn all of it into findings. `when` decides, `title` names the finding, and `severity` grades it unless `judge` does.
+
+`when` compares a measured bucket, a judged answer or anything collected. `==` and `!=` take a bucket name, a criterion, a quoted string or a number, and a name that is neither a bucket nor a criterion of that question is refused when the policy loads. `<`, `<=`, `>` and `>=` need numbers on both sides, which is how you read a noul. Combine with `not`, `and`, `or` and parentheses, in that precedence. `errors.any` is true when the list holds something, and `console.errors[0].text` reads into it.
+
+`title` is text with `{{ }}` placeholders on the same paths. The paths a rule names decide what it runs over: name `request.method` and the rule fires once per request, name `element.label` and it fires once per element, name neither and it fires once per page. A rule cannot name a request and an element at once.
+
+```yaml
 report:
   - when: latency == bad and request_kind == content_for_this_page
     title: "{{request.method}} {{request.path}} took {{request.time}} ms"
@@ -107,41 +223,52 @@ report:
     severity: medium
 ```
 
-Every answer, with its probabilities, is written to `inferred.jsonl` in the run directory. A policy with no `judge` section never calls Jev and needs no `TYPESAFE_API_KEY`.
+### The policies that ship
 
-## Walking an app
+| `--policy` | What it finds |
+|---|---|
+| `errors` | A request that returned 500 or worse, an error the page threw, an error it logged. It asks Jev nothing, so it needs no key. `errors.yaml` |
+| `perf` | A request slower than a second that the page needs, told apart from a slow beacon or third party, and a page still showing a spinner. `perf.yaml` |
+| `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
 
-With a policy and no goal, `run` walks the app on its own: it tries every control it finds once, applies the policy after every step, and writes down what it found.
+## Through the plugin protocol
+
+An agent that has agent-browser starts the same run without knowing the CLI:
 
 ```bash
-agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+agent-browser plugin run jev jev.run --payload '{"goal":"open the settings page","wait":true}'
+agent-browser plugin run jev jev.status --payload '{"runId":"jev-run-2f9c1d40aa"}'
 ```
 
-Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
+agent-browser kills a plugin at 60 seconds, so `jev.run` starts the run as a detached worker and answers `{ runId, out, status: "running" }` at once. `wait: true` holds the answer for up to 55 seconds and returns the run's final status when it ends in time; `wait: <milliseconds>` holds it for less. A run longer than that keeps going, and `jev.status` reports it.
 
-The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+| Request | Takes | Answers |
+|---|---|---|
+| `plugin.manifest` | nothing | The plugin's name and its capabilities, which is what `plugin add` records |
+| `jev.run` | `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, out, wait }` | `{ runId, out, status }` |
+| `jev.status` | `{ runId }` or `{ out }` | The run's `status.json` |
 
-### Test data
+`status` is `running`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed`, with the last line of `<out>/worker.log` as the reason.
 
-An editable field is filled from a fixture dictionary. The built-in keys are `email`, `password`, `name`, `phone` and `address`. `--fixtures <file>` takes a YAML mapping that replaces a key or adds one:
+The session comes from the payload, else from `AGENT_BROWSER_SESSION` in the environment agent-browser passes down. Anything that goes wrong answers `{ success: false, error }`, and nothing but JSON reaches stdout.
 
-```yaml
-email: qa@acme.test
-company: Acme Ltd
-```
+## What a run writes
 
-Jev picks the key per field, with a `NONE` option for a field no value fits. Nothing is typed unless the chosen key is over 0.5, and every field left empty lands in `unfilled.json` with its label and its page.
-
-### What a walk writes
+Everything lands in `--out`, a fresh directory under the temp dir when you name none. The result and `status.json` both carry the path.
 
 | File | What is in it |
 |---|---|
-| `findings.json` | `{ findings, summary }`: one object per finding, then `{ title, severity, where }` for each |
-| `evidence/` | `<n>.webm` and `<n>-<step>.png` per finding, from the replay below |
+| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt }`, rewritten at every step. A walk sets `goal` to null and adds `policy`, `findings` and `unfilled` |
+| `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
+| `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |
+| `findings.json` | What a walk found, below |
+| `evidence/` | `<n>.webm` and `<n>-<step>.png` per finding, from the replay |
 | `frontier.json` | Every control the walk has seen, with `tried` |
 | `unfilled.json` | `{ label, url }` for each field no fixture value fitted |
-| `steps.jsonl` | One line per step: the control, the value, whether it ran and why not |
-| `observed.jsonl`, `inferred.jsonl`, `status.json` | As a goal run writes them |
+| `steps.jsonl` | One line per walk step: the control, the value, whether it ran and why not |
+| `worker.log` | What the run printed when the protocol started it |
+
+`findings.json` holds `{ findings, summary }`: every finding in the order the walk raised them, then `{ title, severity, where }` for each, for an agent to read first.
 
 ```json
 {
@@ -165,30 +292,26 @@ Jev picks the key per field, with a `NONE` option for a field no value fits. Not
 }
 ```
 
-`step` is the step the walk was on when the policy saw it, so the lines of `steps.jsonl` below that number are the actions that led there. A finding the policy raises again is not added twice: a `same_as_finding_<k>` Noul runs against every finding so far, and over 0.8 the new sighting joins `repeats` instead.
+`severity` is null when the policy sets none. `step` is the step the walk was on when the policy saw it, so the lines of `steps.jsonl` below that number are the actions that led there. A finding the policy raises again is not added twice: a `same_as_finding_<k>` Noul runs against every finding so far, and over 0.8 the new sighting joins `repeats` instead.
 
-### The replay behind a finding
+## Checked by hand
 
-A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`.
+The test suite replays recorded Jev answers and never calls the paid API, so the checks below are the ones that prove the real thing. Each needs a real `TYPESAFE_API_KEY`, a local fixture site and an agent-browser session of its own.
 
-The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. That session starts cold, with none of the walk's cookies or storage, so a finding several screens past a login may not reproduce. It is closed when the walk ends, and every act in it is human-paced: the recording is evidence someone watches.
+| Check | The command | Run for real |
+|---|---|---|
+| A goal run reaches its page | `run "log in as alice@example.com with password secret and open Settings" --url .../login.html` | Yes. Four actions, `status: "done"`, ending on `/settings.html` |
+| The protocol path answers in time | `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` | Yes, against agent-browser 0.38.1. The final status came back in 5.2 s |
+| A policy judges one page | `run --policy bug-hunt --max-steps 0 --session <name>` on a page that fetches a 500 and shows a banner | Yes, with `errors`, `perf` and `bug-hunt` on that page. `bug-hunt` raised two findings, and `inferred.jsonl` shows the probabilities behind them |
+| A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
+| A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
+| A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. `--input-mode human`, `record start --cursor` and `click --human` were checked against agent-browser 0.38.1 without Jev, and gave a playable VP8 `.webm` with a cursor that eases between targets |
 
-A policy that collects `har` cannot drive a walk, because a HAR is recorded over a reload. Judge one page with `--max-steps 0` instead.
+The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
 
-### Checking the walk by hand
+### A page for the perf policy
 
-```bash
-agent-browser --session jev-walk open <the agent-browser dashboard>
-TYPESAFE_API_KEY=... node dist/main.js run --policy errors --allow all --session jev-walk --max-steps 20
-```
-
-Expect every control on the first two screens tried once, `tried: true` on each entry of `frontier.json`, and the walk stopping inside the budget. This check has not been run: no `TYPESAFE_API_KEY` was readable where the walk was built, so the replies under `test/replay/walk-*.json` are written by hand to the documented response shape.
-
-The replay behind a finding asks Jev nothing, so it was checked against agent-browser 0.38.1 for real, on a two-page signup fixture: three actions replayed cold on a `-repro` session gave three screenshots of the page each act produced, a 1280×577 frame of the welcome page after the click, a playable `.webm` with the cursor over the button it pressed, and one console line, the one that page logged.
-
-## Checking perf.yaml by hand
-
-`perf.yaml` has to tell a slow request the page needs from a slow request it does not. The replay tests prove the fan-out; this proves the judgment. Save this server outside the repo and run it:
+`perf.yaml` has to tell a slow request the page needs from a slow request it does not. Save this outside the repo and run it:
 
 ```js
 import { createServer } from "node:http";
@@ -207,9 +330,9 @@ createServer(async (req, res) => {
 
 Both requests are slower than a second, so `latency` buckets both as `bad` and only Jev separates them:
 
-```
-agent-browser --session perf open http://127.0.0.1:8791/index.html
-TYPESAFE_API_KEY=... node dist/main.js run --policy perf --max-steps 0 --session perf
+```bash
+agent-browser --session jev-perf open http://127.0.0.1:8791/index.html
+agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-perf
 ```
 
-One finding, `GET /api/products took 2501 ms`, and nothing about the beacon. `inferred.jsonl` at the path printed under `inferred` shows why: `/api/products` is `content_for_this_page`, the beacon is `analytics`.
+Expect one finding, `GET /api/products took 2501 ms`, and nothing about the beacon. The file at `inferred` says why: `/api/products` is `content_for_this_page`, the beacon is `analytics`.
