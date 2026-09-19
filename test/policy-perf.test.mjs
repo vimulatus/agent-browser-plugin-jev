@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { judgePage } from "../dist/policy/index.js";
+import { judgePage, recordHar } from "../dist/policy/index.js";
 
 // A page whose /api/products takes 2.5 s and whose analytics beacon takes 1.2 s,
 // captured from agent-browser 0.38.1 against a local server, with the Jev reply jev-1.13.0 gave for it.
@@ -41,6 +41,19 @@ test("run --policy perf --max-steps 0 reports the slow API, not the slow beacon,
       ["stuck_loading", 0, 0.11],
     ],
   );
+});
+
+test("a reload that fails still stops the recording, so the next run can start one", async () => {
+  const commands = [];
+  const browser = {
+    run: async (args) => {
+      commands.push(args.join(" "));
+      if (args[0] === "reload") throw new Error("navigation failed");
+      return { path: `${FIXTURES}capture.har` };
+    },
+  };
+  await assert.rejects(recordHar(browser), /navigation failed/);
+  assert.deepEqual(commands, ["network har start", "reload", "network har stop"]);
 });
 
 test("a policy with no judge section writes no inferred.jsonl", async () => {

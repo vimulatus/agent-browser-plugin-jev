@@ -18,6 +18,7 @@ export interface Jev {
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const MODEL = "jev-latest";
 const ATTEMPTS = 3;
+const TIMEOUT = 25_000;
 const RETRY_STATUS = new Set([429, 503, 529]);
 
 /** Jev over the TypeSafe System One API. `TYPESAFE_API_KEY` is read for the call and never stored. */
@@ -31,6 +32,7 @@ export function typesafeJev(model = MODEL): Jev {
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model, state, questions }),
+          signal: AbortSignal.timeout(TIMEOUT),
         });
         if (RETRY_STATUS.has(response.status) && attempt < ATTEMPTS - 1) {
           await new Promise((done) => setTimeout(done, 500 * 2 ** attempt));

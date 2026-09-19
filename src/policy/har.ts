@@ -34,8 +34,17 @@ export function readHar(path: string): RequestFact[] {
 /** Reloads the page under a HAR recording, so every request the page makes is timed. */
 export async function recordHar(browser: AgentBrowser): Promise<RequestFact[]> {
   await browser.run(["network", "har", "start"]);
-  await browser.run(["reload"]);
-  await settle(browser);
+  try {
+    await browser.run(["reload"]);
+    await settle(browser);
+  } catch (failure) {
+    await stop(browser);
+    throw failure;
+  }
+  return stop(browser);
+}
+
+async function stop(browser: AgentBrowser): Promise<RequestFact[]> {
   const { path } = (await browser.run(["network", "har", "stop"])) as unknown as { path: string };
   return readHar(path);
 }

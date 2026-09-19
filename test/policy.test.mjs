@@ -163,9 +163,10 @@ test("a judge question is rejected when its type, its criteria or what it runs o
 
 test("a rule reading a judged name runs over that name's items and compares with its criteria", () => {
   const policy = parsePolicy(
-    judging("  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }", [
+    judging(
+      "  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }",
       '\n  - { when: kind == api, title: "{{request.path}}", severity: low }',
-    ]),
+    ),
   );
   assert.deepEqual(policy.judgments, [
     { name: "kind", type: "choice", over: "request", instructions: "x", criteria: { api: "a", asset: "b" } },
@@ -174,9 +175,10 @@ test("a rule reading a judged name runs over that name's items and compares with
   assert.throws(
     () =>
       parsePolicy(
-        judging("  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }", [
+        judging(
+          "  kind: { type: choice, over: request, instructions: x, criteria: { api: a, asset: b } }",
           "\n  - { when: kind == script, title: x, severity: low }",
-        ]),
+        ),
       ),
     /script.*api, asset/,
   );

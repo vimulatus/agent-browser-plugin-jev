@@ -105,7 +105,7 @@ report:
     severity: medium
 ```
 
-Every answer, with its probabilities, is written to `inferred.jsonl` in the run directory. A policy with no `judge` section calls Jev not at all and needs no `TYPESAFE_API_KEY`.
+Every answer, with its probabilities, is written to `inferred.jsonl` in the run directory. A policy with no `judge` section never calls Jev and needs no `TYPESAFE_API_KEY`.
 
 ## Checking perf.yaml by hand
 
