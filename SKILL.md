@@ -9,7 +9,7 @@ One command reaches a page. One policy file turns what the browser shows into fi
 
 ## Install
 
-Once for the machine, and it works from any directory, including a bun or yarn project:
+Install once for the machine. It works from any directory, including a bun or yarn project:
 
 ```bash
 npm i -g agent-browser-plugin-jev

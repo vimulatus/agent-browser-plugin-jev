@@ -15,13 +15,13 @@ const requestTypes = [
   ...readFileSync(`${root}src/protocol.ts`, "utf8").matchAll(/envelope\.type === "([^"]+)"/g),
 ].map((match) => match[1]);
 const policies = readdirSync(`${root}policies`).map((file) => file.replace(/\.yaml$/, ""));
+const install = `npm i -g ${JSON.parse(readFileSync(`${root}package.json`, "utf8")).name}`;
 
 function documents(text, token) {
   return text.includes(`\`${token}\``);
 }
 
 test("the README names the install command from npm", () => {
-  const install = `npm i -g ${JSON.parse(readFileSync(`${root}package.json`, "utf8")).name}`;
   assert.ok(readme.includes(install), `README does not name ${install}`);
 });
 
@@ -57,7 +57,7 @@ test("SKILL.md carries the install, the policy grammar and both run forms", () =
     assert.ok(documents(skill, collection), `SKILL.md does not name collect: ${collection}`);
   }
   for (const token of [
-    "npm i -g agent-browser-plugin-jev",
+    install,
     "npm link",
     "~/.agent-browser/config.json",
     "--policy",
