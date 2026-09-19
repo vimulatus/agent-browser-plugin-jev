@@ -54,15 +54,20 @@ function describe(element: Element): Record<string, unknown> {
   };
 }
 
+/** A Choice question takes at most 255 options (docs.typesafe.ai/primitives/choice). */
+const MAX_TARGETS = 250;
+
 function targetsFor(elements: Element[], operation: ElementOperation): Map<string, Target> {
   const targets = new Map<string, Target>();
   for (const element of elements) {
+    if (targets.size >= MAX_TARGETS) break;
     if (!element.operations.includes(operation)) continue;
     if (operation !== "SELECT") {
       targets.set(element.index, { element, criteria: describe(element) });
       continue;
     }
     for (const option of element.options ?? []) {
+      if (targets.size >= MAX_TARGETS) break;
       targets.set(option.index, {
         element,
         option,

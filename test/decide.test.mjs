@@ -160,3 +160,18 @@ test("an answer that is not over the offered options is refused, and nothing act
   });
   await assert.rejects(decide(input(short)), /do not sum to 1/);
 });
+
+test("a long dropdown is capped, because a Choice takes at most 255 options", async () => {
+  const options = Array.from({ length: 300 }, (_, i) => `  - option "o${i}" [ref=o${i}]`).join("\n");
+  const jev = ask({
+    operation: {
+      type: "choice",
+      choice: "BLOCKED",
+      probabilities: { SELECT: 0.1, SCROLL_UP: 0.02, SCROLL_DOWN: 0.02, WAIT: 0.02, DONE: 0.04, BLOCKED: 0.8 },
+      confidence: 0.8,
+    },
+  });
+  const text = `- combobox "Plan" [expanded=false, ref=e1]: o0\n${options}`;
+  await decide(input(jev, { observation: observation(text), spans: [], allow: "all" }));
+  assert.equal(Object.keys(jev.requests[0].questions.select_target.criteria).length, 250);
+});
