@@ -6,9 +6,12 @@ import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
 export const USAGE = `agent-browser-plugin-jev
 
   agent-browser-plugin-jev run "<goal>" [options]
+  agent-browser-plugin-jev run --policy <file> [options]
 
-Drives the browser to the goal, one Jev request per step, and prints
+With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.
+With a policy and no goal it walks the app from --url, trying every control
+once, and writes findings.json. --max-steps 0 judges the current page instead.
 
   --url <url>        Open this page before the first step
   --session <name>   agent-browser session; default $AGENT_BROWSER_SESSION
@@ -16,6 +19,8 @@ Drives the browser to the goal, one Jev request per step, and prints
   --out <dir>        Run artifacts; default a fresh directory under the temp dir
   --allow <verbs>    Let the run ${Object.keys(VERBS).join(", ")}; or all
   --model <name>     System One model; default ${DEFAULT_MODEL}
+  --policy <file>    Judge every step against this policy, by path or by name
+  --fixtures <file>  Values a walk types into forms; overrides the built-in keys
   --record <file>    Record the run to this .webm or .mp4, cursor included
   --human            Move the pointer along a curve instead of jumping
 
@@ -70,6 +75,8 @@ export function parseRunArgs(argv: string[]): RunOptions {
     else if (flag === "--session") options.session = value;
     else if (flag === "--out") options.out = value;
     else if (flag === "--model") options.model = value;
+    else if (flag === "--policy") options.policy = value;
+    else if (flag === "--fixtures") options.fixtures = value;
     else if (flag === "--record") options.record = resolve(value);
     else if (flag === "--allow") options.allow = allowFrom(value);
     else if (flag === "--max-steps") options.maxSteps = stepsFrom(value);

@@ -1,0 +1,58 @@
+{
+  "signup": [
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]\n- textbox \"Password\" [ref=e3]\n- textbox \"Company\" [ref=e4]\n- button \"Create account\" [ref=e5]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]\n- textbox \"Company\" [ref=e4]\n- button \"Create account\" [ref=e5]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]: •••\n- textbox \"Company\" [ref=e4]\n- button \"Create account\" [ref=e5]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/welcome.html",
+      "title": "Welcome",
+      "snapshot": "- heading \"Welcome\" [level=1, ref=e1]\n- paragraph \"Your account is ready\" [ref=e2]"
+    }
+  ],
+  "shop": [
+    {
+      "url": "http://127.0.0.1:8765/index.html",
+      "title": "Shop",
+      "snapshot": "- heading \"Shop\" [level=1, ref=e1]\n- link \"Orders\" [ref=e2]\n- button \"Refresh\" [ref=e3]",
+      "console": [{ "type": "error", "text": "TypeError: cart is not defined" }]
+    },
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- button \"Save\" [ref=e2]",
+      "console": [{ "type": "error", "text": "TypeError: cart is not defined" }]
+    }
+  ],
+  "dashboard": [
+    {
+      "url": "http://127.0.0.1:8765/index.html",
+      "title": "Dashboard",
+      "snapshot": "- heading \"Dashboard\" [level=1, ref=e1]\n- button \"Delete account\" [ref=e2]\n- link \"Docs\" [ref=e3]"
+    },
+    {
+      "url": "https://example.com/docs",
+      "title": "Docs",
+      "snapshot": "- heading \"Docs\" [level=1, ref=e1]"
+    }
+  ],
+  "bug-walk": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- button \"Save\" [ref=e2]",
+      "content": "- heading \"Orders\" [level=1]\n- paragraph \"Something went wrong\"\n- button \"Save\""
+    }
+  ]
+}

@@ -12,7 +12,8 @@ import { valueSpans } from "./spans.js";
 export const DEFAULT_MAX_STEPS = 60;
 /** This many acts in a row that leave the page unchanged mean the run cannot progress. */
 const STUCK = 3;
-const MASK = "•••";
+/** What a run logs in place of a value it typed into a field that hides what it holds. */
+export const MASK = "•••";
 
 export interface RunOptions {
   goal: string;
@@ -24,6 +25,8 @@ export interface RunOptions {
   model: string;
   record?: string;
   human: boolean;
+  policy?: string;
+  fixtures?: string;
 }
 
 /** What `<out>/status.json` reports while the run is in flight and once it has ended. */

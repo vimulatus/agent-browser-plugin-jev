@@ -43,7 +43,8 @@ interface Target {
   criteria: Record<string, unknown>;
 }
 
-function describe(element: Element): Record<string, unknown> {
+/** What Jev sees of one element it could act on: what it is, and what it holds now. */
+export function describe(element: Element): Record<string, unknown> {
   const { role, checked, selected, expanded, password } = element;
   return {
     element: `[${element.index}] ${element.label}`,

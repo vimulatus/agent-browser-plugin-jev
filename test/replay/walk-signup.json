@@ -1,0 +1,77 @@
+{
+  "pages": "signup",
+  "responses": [
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "1",
+          "confidence": 0.62,
+          "probabilities": { "1": 0.62, "2": 0.21, "3": 0.09, "4": 0.08 }
+        },
+        "fixture_value_1": {
+          "type": "choice",
+          "choice": "email",
+          "confidence": 0.94,
+          "probabilities": { "email": 0.94, "password": 0.01, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        },
+        "fixture_value_2": {
+          "type": "choice",
+          "choice": "password",
+          "confidence": 0.93,
+          "probabilities": { "email": 0.02, "password": 0.93, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        },
+        "fixture_value_3": {
+          "type": "choice",
+          "choice": "NONE",
+          "confidence": 0.71,
+          "probabilities": { "email": 0.05, "password": 0.01, "name": 0.11, "phone": 0.04, "address": 0.08, "NONE": 0.71 }
+        }
+      },
+      "usage": { "input_tokens": 742, "output_tokens": 31 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "2",
+          "confidence": 0.68,
+          "probabilities": { "2": 0.68, "3": 0.17, "4": 0.15 }
+        },
+        "fixture_value_2": {
+          "type": "choice",
+          "choice": "password",
+          "confidence": 0.93,
+          "probabilities": { "email": 0.02, "password": 0.93, "name": 0.02, "phone": 0.01, "address": 0.01, "NONE": 0.01 }
+        },
+        "fixture_value_3": {
+          "type": "choice",
+          "choice": "NONE",
+          "confidence": 0.71,
+          "probabilities": { "email": 0.05, "password": 0.01, "name": 0.11, "phone": 0.04, "address": 0.08, "NONE": 0.71 }
+        }
+      },
+      "usage": { "input_tokens": 758, "output_tokens": 24 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "3",
+          "confidence": 0.55,
+          "probabilities": { "3": 0.55, "4": 0.45 }
+        },
+        "fixture_value_3": {
+          "type": "choice",
+          "choice": "NONE",
+          "confidence": 0.71,
+          "probabilities": { "email": 0.05, "password": 0.01, "name": 0.11, "phone": 0.04, "address": 0.08, "NONE": 0.71 }
+        }
+      },
+      "usage": { "input_tokens": 770, "output_tokens": 17 }
+    }
+  ]
+}

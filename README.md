@@ -23,6 +23,8 @@ It prints `{ status, url, steps, actions, snapshot, out, record, reason }` as JS
 | `--out <dir>` | Where the run writes its artifacts; default a fresh directory under the temp dir |
 | `--allow <verbs>` | Lets the run delete, send, pay, publish, submit; or `all` |
 | `--model <name>` | The System One model; default `jev-latest` |
+| `--policy <file>` | Judges every step against this policy, by path or by shipped name |
+| `--fixtures <file>` | The values a walk types into forms; replaces or adds a built-in key |
 | `--record <file>` | Records the run to this `.webm` or `.mp4`, cursor included |
 | `--human` | Moves the pointer along a curve instead of jumping to each target |
 
@@ -106,6 +108,63 @@ report:
 ```
 
 Every answer, with its probabilities, is written to `inferred.jsonl` in the run directory. A policy with no `judge` section never calls Jev and needs no `TYPESAFE_API_KEY`.
+
+## Walking an app
+
+With a policy and no goal, `run` walks the app on its own: it tries every control it finds once, applies the policy after every step, and writes down what it found.
+
+```bash
+agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+```
+
+Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
+
+The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+
+### Test data
+
+An editable field is filled from a fixture dictionary. The built-in keys are `email`, `password`, `name`, `phone` and `address`. `--fixtures <file>` takes a YAML mapping that replaces a key or adds one:
+
+```yaml
+email: qa@acme.test
+company: Acme Ltd
+```
+
+Jev picks the key per field, with a `NONE` option for a field no value fits. Nothing is typed unless the chosen key is over 0.5, and every field left empty lands in `unfilled.json` with its label and its page.
+
+### What a walk writes
+
+| File | What is in it |
+|---|---|
+| `findings.json` | One object per finding, with every later sighting under `repeats` |
+| `frontier.json` | Every control the walk has seen, with `tried` |
+| `unfilled.json` | `{ label, url }` for each field no fixture value fitted |
+| `steps.jsonl` | One line per step: the control, the value, whether it ran and why not |
+| `observed.jsonl`, `inferred.jsonl`, `status.json` | As a goal run writes them |
+
+```json
+{
+  "title": "Clicking Save on /orders.html does nothing",
+  "severity": "high",
+  "where": "http://127.0.0.1:8765/orders.html",
+  "step": 2,
+  "evidence": { "element": { "index": "1", "role": "button", "label": "Save" } },
+  "repeats": [{ "step": 7, "where": "http://127.0.0.1:8765/orders.html?page=2" }]
+}
+```
+
+`step` is the step the walk was on when the policy saw it, so the lines of `steps.jsonl` below that number are the actions that led there. A finding the policy raises again is not added twice: a `same_as_finding_<k>` Noul runs against every finding so far, and over 0.8 the new sighting joins `repeats` instead.
+
+A policy that collects `har` cannot drive a walk, because a HAR is recorded over a reload. Judge one page with `--max-steps 0` instead.
+
+### Checking the walk by hand
+
+```bash
+agent-browser --session jev-walk open <the agent-browser dashboard>
+TYPESAFE_API_KEY=... node dist/main.js run --policy errors --allow all --session jev-walk --max-steps 20
+```
+
+Expect every control on the first two screens tried once, `tried: true` on each entry of `frontier.json`, and the walk stopping inside the budget. This check has not been run: no `TYPESAFE_API_KEY` was readable where the walk was built, so the replies under `test/replay/walk-*.json` are written by hand to the documented response shape.
 
 ## Checking perf.yaml by hand
 

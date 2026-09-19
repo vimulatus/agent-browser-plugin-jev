@@ -8,3 +8,9 @@ test("with no envelope and no arguments the bin prints usage to stderr only", ()
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /agent-browser-plugin-jev/);
 });
+
+test("run with neither a goal nor a policy says what it needs", () => {
+  const result = spawnSync("node", ["dist/main.js", "run", "--session", "jev-test"], { encoding: "utf8", input: "" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /run needs a goal or a policy/);
+});

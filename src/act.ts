@@ -1,10 +1,17 @@
-import type { Decision } from "./decide.js";
+import type { Operation } from "./decide.js";
+
+/** What a decision or a walk does to the page, and to which element. */
+export interface Act {
+  operation: Operation;
+  ref: string | null;
+  value: string | null;
+}
 
 /**
  * The agent-browser command one decision runs, or null when the run stops instead.
  * `human` approaches a click along an eased curve instead of jumping to it.
  */
-export function commandFor(decision: Decision, human: boolean): string[] | null {
+export function commandFor(decision: Act, human: boolean): string[] | null {
   const ref = `@${decision.ref}`;
   switch (decision.operation) {
     case "CLICK":

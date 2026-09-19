@@ -1,0 +1,37 @@
+{
+  "pages": "shop",
+  "responses": [
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "1",
+          "confidence": 0.71,
+          "probabilities": { "1": 0.71, "2": 0.29 }
+        }
+      },
+      "usage": { "input_tokens": 512, "output_tokens": 12 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": { "same_as_finding_0": { "type": "noul", "noul": 0.91 } },
+      "usage": { "input_tokens": 231, "output_tokens": 6 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": { "same_as_finding_0": { "type": "noul", "noul": 0.93 } },
+      "usage": { "input_tokens": 231, "output_tokens": 6 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": { "same_as_finding_0": { "type": "noul", "noul": 0.9 } },
+      "usage": { "input_tokens": 231, "output_tokens": 6 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": { "same_as_finding_0": { "type": "noul", "noul": 0.88 } },
+      "usage": { "input_tokens": 231, "output_tokens": 6 }
+    }
+  ]
+}
