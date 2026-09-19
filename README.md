@@ -136,7 +136,8 @@ Jev picks the key per field, with a `NONE` option for a field no value fits. Not
 
 | File | What is in it |
 |---|---|
-| `findings.json` | One object per finding, with every later sighting under `repeats` |
+| `findings.json` | `{ findings, summary }`: one object per finding, then `{ title, severity, where }` for each |
+| `evidence/` | `<n>.webm` and `<n>-<step>.png` per finding, from the replay below |
 | `frontier.json` | Every control the walk has seen, with `tried` |
 | `unfilled.json` | `{ label, url }` for each field no fixture value fitted |
 | `steps.jsonl` | One line per step: the control, the value, whether it ran and why not |
@@ -149,11 +150,28 @@ Jev picks the key per field, with a `NONE` option for a field no value fits. Not
   "where": "http://127.0.0.1:8765/orders.html",
   "step": 2,
   "evidence": { "element": { "index": "1", "role": "button", "label": "Save" } },
-  "repeats": [{ "step": 7, "where": "http://127.0.0.1:8765/orders.html?page=2" }]
+  "repeats": [{ "step": 7, "where": "http://127.0.0.1:8765/orders.html?page=2" }],
+  "reproduced": true,
+  "repro": [
+    {
+      "action": "click \"Save\"",
+      "url": "http://127.0.0.1:8765/orders.html",
+      "screenshot": "<out>/evidence/1-1.png"
+    }
+  ],
+  "recording": "<out>/evidence/1.webm",
+  "console": ["error: TypeError: order is not defined"],
+  "errors": []
 }
 ```
 
 `step` is the step the walk was on when the policy saw it, so the lines of `steps.jsonl` below that number are the actions that led there. A finding the policy raises again is not added twice: a `same_as_finding_<k>` Noul runs against every finding so far, and over 0.8 the new sighting joins `repeats` instead.
+
+### The replay behind a finding
+
+A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`.
+
+The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. That session starts cold, with none of the walk's cookies or storage, so a finding several screens past a login may not reproduce. It is closed when the walk ends, and every act in it is human-paced: the recording is evidence someone watches.
 
 A policy that collects `har` cannot drive a walk, because a HAR is recorded over a reload. Judge one page with `--max-steps 0` instead.
 
@@ -165,6 +183,8 @@ TYPESAFE_API_KEY=... node dist/main.js run --policy errors --allow all --session
 ```
 
 Expect every control on the first two screens tried once, `tried: true` on each entry of `frontier.json`, and the walk stopping inside the budget. This check has not been run: no `TYPESAFE_API_KEY` was readable where the walk was built, so the replies under `test/replay/walk-*.json` are written by hand to the documented response shape.
+
+The replay behind a finding asks Jev nothing, so it was checked against agent-browser 0.38.1 for real, on a two-page signup fixture: three actions replayed cold on a `-repro` session gave three screenshots of the page each act produced, a 1280×577 frame of the welcome page after the click, a playable `.webm` with the cursor over the button it pressed, and one console line, the one that page logged.
 
 ## Checking perf.yaml by hand
 
