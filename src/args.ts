@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { DEFAULT_MODEL } from "./jev.js";
 import { VERBS } from "./questions.js";
 import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
@@ -15,6 +16,8 @@ Drives the browser to the goal, one Jev request per step, and prints
   --out <dir>        Run artifacts; default a fresh directory under the temp dir
   --allow <verbs>    Let the run ${Object.keys(VERBS).join(", ")}; or all
   --model <name>     System One model; default ${DEFAULT_MODEL}
+  --record <file>    Record the run to this .webm or .mp4, cursor included
+  --human            Move the pointer along a curve instead of jumping
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 With no arguments it speaks agent-browser.plugin.v1 on stdin. Register it with
@@ -47,6 +50,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
     out: "",
     allow: new Set<string>(),
     model: process.env.TYPESAFE_MODEL ?? DEFAULT_MODEL,
+    human: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -55,12 +59,17 @@ export function parseRunArgs(argv: string[]): RunOptions {
       options.goal = flag;
       continue;
     }
+    if (flag === "--human") {
+      options.human = true;
+      continue;
+    }
     const value = argv[++i];
     if (value === undefined) throw new UsageError(`${flag} needs a value`);
     if (flag === "--url") options.url = value;
     else if (flag === "--session") options.session = value;
     else if (flag === "--out") options.out = value;
     else if (flag === "--model") options.model = value;
+    else if (flag === "--record") options.record = resolve(value);
     else if (flag === "--allow") options.allow = allowFrom(value);
     else if (flag === "--max-steps") options.maxSteps = stepsFrom(value);
     else throw new UsageError(`unknown option ${flag}`);

@@ -15,6 +15,7 @@ function options(goal, overrides = {}) {
     out: defaultOut(),
     allow: new Set(),
     model: "jev-latest",
+    human: false,
     ...overrides,
   };
 }
@@ -141,4 +142,46 @@ test("--url opens the start page before the first step", async (t) => {
   const { browser, out } = await drive("login", null, { url: "http://127.0.0.1:8765/login.html" });
   t.after(() => rmSync(out, { recursive: true, force: true }));
   assert.equal(browser.state.calls[0], "open http://127.0.0.1:8765/login.html");
+});
+
+test("--record wraps the run in a cursor recording and --human curves every click", async (t) => {
+  const record = "/tmp/jev-record/demo.webm";
+  const { result, browser, out } = await drive("login", null, { record, human: true });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.deepEqual(acts(browser), [
+    `record start ${record} --cursor`,
+    "fill @e5 alice@example.com",
+    "fill @e6 secret",
+    "click @e4 --human",
+    "record stop",
+  ]);
+  assert.equal(result.record, record);
+  assert.equal(status(out).record, record);
+});
+
+test("--record without --human records the same run with an instant pointer", async (t) => {
+  const record = "/tmp/jev-record/instant.webm";
+  const { browser, out } = await drive("login", null, { record });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.deepEqual(acts(browser), [
+    `record start ${record} --cursor`,
+    "fill @e5 alice@example.com",
+    "fill @e6 secret",
+    "click @e4",
+    "record stop",
+  ]);
+  assert.ok(!browser.state.calls.some((call) => call.includes("--human")));
+});
+
+test("the recording starts on the page --url opened, not on the page before it", async (t) => {
+  const record = "/tmp/jev-record/opened.webm";
+  const { browser, out } = await drive("login", null, { record, url: "http://127.0.0.1:8765/login.html" });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.deepEqual(browser.state.calls.slice(0, 2), [
+    "open http://127.0.0.1:8765/login.html",
+    `record start ${record} --cursor`,
+  ]);
 });
