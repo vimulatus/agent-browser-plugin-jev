@@ -5,7 +5,7 @@ import { commandFor } from "./act.js";
 import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
 import { chooseNext, type Chosen } from "./choose.js";
 import { THRESHOLD, type Allow, type Recent } from "./decide.js";
-import { findingAt, sameAs, type WalkFinding } from "./findings.js";
+import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
 import { loadFixtures } from "./fixtures.js";
 import { frontier, type Entry } from "./frontier.js";
 import { httpJev, type Jev } from "./jev.js";
@@ -21,6 +21,7 @@ import {
   type Jev as PolicyJev,
   type Previous,
 } from "./policy/index.js";
+import { reproduce } from "./repro.js";
 import { MASK, type RunOptions, type RunStatus } from "./run.js";
 import type { Operation } from "./snapshot.js";
 
@@ -33,6 +34,7 @@ export interface WalkStep {
   url: string;
   hash: string;
   kind: Operation;
+  role: string;
   label: string;
   ref: string;
   value: string | null;
@@ -58,18 +60,24 @@ export interface WalkResult {
   reason: string;
 }
 
-/** What the walk drives: the browser, Jev for its own questions, and Jev for the policy's. */
+/** What the walk drives: the browser, the session it replays findings on, and Jev for its own and the policy's questions. */
 export interface WalkDeps {
   browser: AgentBrowser;
+  repro: AgentBrowser;
   jev: Jev;
   policyJev: PolicyJev;
 }
 
+/**
+ * The replay runs on a session of its own, because a recording, the active tab and the refs of a snapshot all
+ * belong to a session, and the walk is still using its own. It is always human-paced: the recording is evidence.
+ */
 export function defaultWalkDeps(options: WalkOptions): WalkDeps {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
   return {
     browser: agentBrowser(options.session, options.human),
+    repro: agentBrowser(`${options.session}-repro`, true),
     jev: httpJev(apiKey),
     policyJev: typesafeJev(options.model),
   };
@@ -126,7 +134,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   };
   const save = async (state: RunStatus) => {
     await write("frontier.json", seen.entries());
-    await write("findings.json", findings);
+    await write("findings.json", summarize(findings));
     await write("unfilled.json", unfilled);
     await write("status.json", {
       status: state,
@@ -148,6 +156,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   await save("running");
 
   let browser: AgentBrowser | null = null;
+  let replayed: AgentBrowser | undefined;
   let recording = false;
   try {
     const deps = injected ?? defaultWalkDeps(options);
@@ -158,15 +167,20 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       recording = true;
     }
 
-    /** The policy over the page in front of the walk: judge it, apply the rules, keep what is not already reported. */
-    const inspect = async (page: Observation, previous: Previous | undefined, step: number) => {
+    /** Every rule of the policy that fires on one page, with the answers Jev gave the rules to read. */
+    const firesOn = async (on: AgentBrowser, page: Observation, previous: Previous | undefined) => {
       const gathered: Gathered = {
         previous,
-        content: policy.collect.includes("content") ? await readContent(deps.browser) : undefined,
+        content: policy.collect.includes("content") ? await readContent(on) : undefined,
       };
       const inferences = await judge(policy, page, gathered, deps.policyJev);
-      const applied = applyPolicy(policy, page, { ...gathered, inferences });
-      const judged = await judgeFindings(policy, page, gathered, applied, deps.policyJev);
+      return { gathered, inferences, fired: applyPolicy(policy, page, { ...gathered, inferences }) };
+    };
+
+    /** The policy over the page in front of the walk: judge it, apply the rules, keep what is not already reported. */
+    const inspect = async (page: Observation, previous: Previous | undefined, step: number, from: string) => {
+      const { gathered, inferences, fired } = await firesOn(deps.browser, page, previous);
+      const judged = await judgeFindings(policy, page, gathered, fired, deps.policyJev);
       const answered = [...inferences, ...judged.inferences];
       if (answered.length > 0) {
         await appendFile(
@@ -177,25 +191,44 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       for (const finding of judged.findings) {
         const candidate = findingAt(finding, page.url, step);
         const repeats = await sameAs(deps.jev, options.model, candidate, findings);
-        if (repeats === null) findings.push(candidate);
-        else findings[repeats].repeats.push({ step: candidate.step, where: candidate.where });
+        if (repeats !== null) {
+          findings[repeats].repeats.push({ step: candidate.step, where: candidate.where });
+          continue;
+        }
+        findings.push(candidate);
+        await save("running");
+        replayed = deps.repro;
+        Object.assign(
+          candidate,
+          await reproduce({
+            browser: deps.repro,
+            out: options.out,
+            home: from,
+            number: findings.length,
+            actions: actionsBefore(options.out, candidate.step),
+            fixtures,
+            fires: async (replay, acted) => {
+              const { fired: again } = await firesOn(deps.repro, replay, acted);
+              return again.some((one) => one.title === candidate.title);
+            },
+          }),
+        );
+        await save("running");
       }
     };
 
     let home = options.url ?? null;
-    let origin = home === null ? null : new URL(home).origin;
+    let origin: string | null = null;
     let previous: Previous | undefined;
     let acted: { recent: Recent; hash: string } | null = null;
     let jumped: Entry | null = null;
 
     while (steps < options.maxSteps) {
       observation = await observe(browser);
-      if (origin === null) {
-        home = observation.url;
-        origin = new URL(observation.url).origin;
-      }
+      home ??= observation.url;
+      origin ??= new URL(home).origin;
       if (new URL(observation.url).origin !== origin) {
-        await browser.run(["open", home as string]);
+        await browser.run(["open", home]);
         previous = undefined;
         observation = await observe(browser);
       }
@@ -208,7 +241,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
       );
 
-      await inspect(observation, previous, steps + 1);
+      await inspect(observation, previous, steps + 1, home);
       previous = undefined;
 
       seen.see(observation.url, observation.elements);
@@ -243,6 +276,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         url: observation.url,
         hash: observation.hash,
         kind: chosen.operation,
+        role: chosen.element.role,
         label: chosen.element.label,
         ref: chosen.ref,
         value: masked,
@@ -305,6 +339,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       await browser.run(["record", "stop"]);
       recording = false;
     }
+    if (replayed !== undefined) await replayed.run(["close"]);
     observation ??= await observe(browser);
     await save("done");
     return {
@@ -320,6 +355,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   } catch (error) {
     reason = (error as Error).message;
     if (recording && browser !== null) await browser.run(["record", "stop"]).catch(() => {});
+    if (replayed !== undefined) await replayed.run(["close"]).catch(() => {});
     await save("failed");
     throw error;
   }

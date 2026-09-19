@@ -26,13 +26,23 @@
       "url": "http://127.0.0.1:8765/index.html",
       "title": "Shop",
       "snapshot": "- heading \"Shop\" [level=1, ref=e1]\n- link \"Orders\" [ref=e2]\n- button \"Refresh\" [ref=e3]",
-      "console": [{ "type": "error", "text": "TypeError: cart is not defined" }]
+      "console": [
+        {
+          "type": "error",
+          "text": "TypeError: cart is not defined"
+        }
+      ]
     },
     {
       "url": "http://127.0.0.1:8765/orders.html",
       "title": "Orders",
       "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- button \"Save\" [ref=e2]",
-      "console": [{ "type": "error", "text": "TypeError: cart is not defined" }]
+      "console": [
+        {
+          "type": "error",
+          "text": "TypeError: cart is not defined"
+        }
+      ]
     }
   ],
   "dashboard": [
@@ -53,6 +63,103 @@
       "title": "Orders",
       "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- button \"Save\" [ref=e2]",
       "content": "- heading \"Orders\" [level=1]\n- paragraph \"Something went wrong\"\n- button \"Save\""
+    }
+  ],
+  "signup-bug": [
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]\n- textbox \"Password\" [ref=e3]\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]: •••\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/welcome.html",
+      "title": "Welcome",
+      "snapshot": "- heading \"Welcome\" [level=1, ref=e1]\n- paragraph \"Your account is ready\" [ref=e2]",
+      "console": [
+        {
+          "type": "error",
+          "text": "TypeError: order is not defined"
+        }
+      ]
+    }
+  ],
+  "signup-clean": [
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]\n- textbox \"Password\" [ref=e3]\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]: jev.tester@example.com\n- textbox \"Password\" [ref=e3]: •••\n- button \"Create account\" [ref=e4]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/welcome.html",
+      "title": "Welcome",
+      "snapshot": "- heading \"Welcome\" [level=1, ref=e1]\n- paragraph \"Your account is ready\" [ref=e2]"
+    }
+  ],
+  "signup-moved": [
+    {
+      "url": "http://127.0.0.1:8765/signup.html",
+      "title": "Create account",
+      "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- button \"Sign in with SSO\" [ref=e2]"
+    }
+  ],
+  "orders-500": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Something went wrong\" [ref=e2]",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:8765/api/orders",
+          "status": 500,
+          "resourceType": "Fetch",
+          "mimeType": "application/json",
+          "timestamp": 1789804879926
+        }
+      ]
+    }
+  ],
+  "orders-500-loading": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Loading orders\" [ref=e2]",
+      "requests": []
+    },
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Something went wrong\" [ref=e2]",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:8765/api/orders",
+          "status": 500,
+          "resourceType": "Fetch",
+          "mimeType": "application/json",
+          "timestamp": 1789804879926
+        }
+      ]
     }
   ]
 }
