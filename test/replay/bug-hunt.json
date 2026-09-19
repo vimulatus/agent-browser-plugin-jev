@@ -1,0 +1,58 @@
+{
+  "step": {
+    "answers": {
+      "page_shows_error_to_user": { "type": "noul", "noul": 0.96 },
+      "outcome_matches_action": {
+        "type": "choice",
+        "choice": "nothing",
+        "confidence": 0.91,
+        "probabilities": { "expected": 0.03, "nothing": 0.91, "wrong": 0.06 }
+      },
+      "stuck_loading": { "type": "noul", "noul": 0.04 }
+    }
+  },
+  "step_findings": {
+    "answers": {
+      "severity#0": {
+        "type": "choice",
+        "choice": "high",
+        "confidence": 0.78,
+        "probabilities": { "critical": 0.14, "high": 0.78, "medium": 0.07, "low": 0.01 }
+      },
+      "severity#1": {
+        "type": "choice",
+        "choice": "critical",
+        "confidence": 0.69,
+        "probabilities": { "critical": 0.69, "high": 0.27, "medium": 0.03, "low": 0.01 }
+      },
+      "severity#2": {
+        "type": "choice",
+        "choice": "medium",
+        "confidence": 0.55,
+        "probabilities": { "critical": 0.05, "high": 0.36, "medium": 0.55, "low": 0.04 }
+      }
+    }
+  },
+  "page_only": {
+    "answers": {
+      "page_shows_error_to_user": { "type": "noul", "noul": 0.96 },
+      "stuck_loading": { "type": "noul", "noul": 0.04 }
+    }
+  },
+  "page_only_findings": {
+    "answers": {
+      "severity#0": {
+        "type": "choice",
+        "choice": "critical",
+        "confidence": 0.69,
+        "probabilities": { "critical": 0.69, "high": 0.27, "medium": 0.03, "low": 0.01 }
+      },
+      "severity#1": {
+        "type": "choice",
+        "choice": "medium",
+        "confidence": 0.55,
+        "probabilities": { "critical": 0.05, "high": 0.36, "medium": 0.55, "low": 0.04 }
+      }
+    }
+  }
+}

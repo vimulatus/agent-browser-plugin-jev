@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { agentBrowser } from "../agent-browser.js";
 import { observe } from "../observe.js";
 import { applyPolicy, type Finding } from "./apply.js";
+import { readContent } from "./content.js";
 import { recordHar } from "./har.js";
-import { judge, type Inference } from "./judge.js";
+import { judge, judgeFindings, type Inference } from "./judge.js";
 import { typesafeJev, type Jev } from "./jev.js";
 import { loadPolicy } from "./load.js";
 
@@ -23,15 +24,19 @@ export interface Judged {
 }
 
 /** `run --policy <file> --max-steps 0`: observe the current page once and apply the policy. */
-export async function judgePage({ session, policyPath, out, jev }: JudgePageOptions): Promise<Judged> {
+export async function judgePage({ session, policyPath, out, jev = typesafeJev() }: JudgePageOptions): Promise<Judged> {
   const policy = loadPolicy(policyPath);
   const browser = agentBrowser(session);
   const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
+  const content = policy.collect.includes("content") ? await readContent(browser) : undefined;
   const observation = await observe(browser);
-  const inferences = await judge(policy, observation, har, jev ?? typesafeJev());
-  const findings = applyPolicy(policy, observation, { har, inferences });
-  if (inferences.length === 0) return { findings };
-  return { findings, inferred: writeInferred(inferences, out ?? mkdtempSync(join(tmpdir(), "jev-"))) };
+  const gathered = { har, content };
+  const inferences = await judge(policy, observation, gathered, jev);
+  const applied = applyPolicy(policy, observation, { ...gathered, inferences });
+  const judged = await judgeFindings(policy, observation, gathered, applied, jev);
+  const answered = [...inferences, ...judged.inferences];
+  if (answered.length === 0) return { findings: judged.findings };
+  return { findings: judged.findings, inferred: writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), "jev-"))) };
 }
 
 /** The options when argv is `run --policy <file> --max-steps 0 [--session <name>] [--out <dir>]`, else null. */

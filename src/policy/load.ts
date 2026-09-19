@@ -7,11 +7,17 @@ import { formatPath, type Path } from "./path.js";
 import { parseBuckets, type Buckets } from "./range.js";
 import { parseTemplate, pathsOf as pathsOfTemplate, type Template } from "./template.js";
 
-export const COLLECTIONS = ["console", "errors", "har", "requests", "snapshot"] as const;
+export const COLLECTIONS = ["console", "content", "errors", "har", "requests", "snapshot"] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
 /** What one rule or question runs over: the whole page once, or each request or each element in turn. */
 export type Scope = "page" | "request" | "element";
+
+/** A question also runs over the findings the report rules made, once they exist. */
+export type Over = Scope | "finding";
+
+/** The one thing a policy judges about a finding, after the rules have made it. */
+export const OVER_FINDING = "severity";
 
 export interface Measure {
   scope: Scope;
@@ -23,15 +29,16 @@ export interface Measure {
 export interface Judgment {
   name: string;
   type: "choice" | "noul";
-  over: Scope;
-  instructions: string;
+  over: Over;
+  instructions: Template;
   criteria?: Record<string, string>;
 }
 
+/** A report rule. Its severity is fixed here, unless the policy judges `severity` over every finding. */
 export interface Rule {
   when: Expression;
   title: Template;
-  severity: string;
+  severity?: string;
   scope: Scope;
   evidence: { key: string; path: Path };
 }
@@ -48,7 +55,7 @@ export interface Policy {
 const SECTIONS = ["name", "collect", "measure", "judge", "report"];
 const RULE_FIELDS = ["when", "title", "severity"];
 const JUDGMENT_FIELDS = ["type", "over", "instructions", "criteria"];
-const SCOPES: Scope[] = ["page", "request", "element"];
+const OVERS: Over[] = ["page", "request", "element", "finding"];
 
 /** A name a `when` or a `title` can start from: what must be collected, what it runs over, what it compares with. */
 interface Readable {
@@ -61,11 +68,17 @@ interface Readable {
 const MEASURABLE: Record<string, Readable & { read: Measure["read"] }> = {
   http_status: { collections: ["requests", "har"], scope: "request", read: (facts) => facts.request!.status },
   latency: { collections: ["har"], scope: "request", read: (facts) => facts.request!.time },
+  page_unchanged_after_click: {
+    collections: ["snapshot"],
+    scope: "page",
+    read: (facts) => (facts.action?.kind === "CLICK" ? Number(facts.page.hash === facts.action.before) : null),
+  },
 };
 
 /** The roots a path may start from, with the collections that can fill them. */
 const ROOTS: Record<string, Readable> = {
   page: { collections: ["snapshot"], scope: "page" },
+  action: { collections: ["snapshot"], scope: "page" },
   console: { collections: ["console"], scope: "page" },
   errors: { collections: ["errors"], scope: "page" },
   requests: { collections: ["requests", "har"], scope: "page" },
@@ -147,13 +160,24 @@ export function parsePolicy(text: string, source = "policy"): Policy {
     if (!isRecord(doc.judge)) return fail("judge must map a name to its question");
     for (const [name, spec] of Object.entries(doc.judge)) {
       if (readables[name]) fail(`judge: "${name}" is already a name a rule can read`);
-      const judgment = parseJudgment(name, spec, (message) => fail(`judge ${name}: ${message}`));
-      const { collections } = ROOTS[judgment.over];
-      collected(collections, `judge ${name}: over ${judgment.over}`);
+      const where = `judge ${name}`;
+      const judgment = parseJudgment(name, spec, (message) => fail(`${where}: ${message}`));
+      for (const path of pathsOfTemplate(judgment.instructions)) {
+        const reads = ROOTS[String(path[0])];
+        if (!reads) fail(`${where}: instructions name "${formatPath(path)}", which the browser does not show`);
+        collected(reads.collections, `${where}: "${formatPath(path)}"`);
+        if (reads.scope !== "page" && reads.scope !== judgment.over) {
+          fail(`${where}: a question over ${judgment.over} cannot name "${formatPath(path)}"`);
+        }
+      }
       judgments.push(judgment);
+      if (judgment.over === "finding") continue;
+      const { collections } = ROOTS[judgment.over];
+      collected(collections, `${where}: over ${judgment.over}`);
       readables[name] = { collections, scope: judgment.over, values: judgment.criteria && Object.keys(judgment.criteria) };
     }
   }
+  const judgesSeverity = judgments.some((judgment) => judgment.over === "finding");
 
   const report = doc.report;
   if (!Array.isArray(report)) return fail("report must list rules");
@@ -161,7 +185,11 @@ export function parsePolicy(text: string, source = "policy"): Policy {
     const where = `report[${i}]`;
     if (!isRecord(entry)) return fail(`${where}: expected when, title and severity`);
     for (const key of Object.keys(entry)) if (!RULE_FIELDS.includes(key)) fail(`${where}: unknown field "${key}"`);
-    for (const key of RULE_FIELDS) if (typeof entry[key] !== "string") fail(`${where}: ${key} must be a string`);
+    for (const key of ["when", "title"]) if (typeof entry[key] !== "string") fail(`${where}: ${key} must be a string`);
+    if (judgesSeverity && entry.severity !== undefined) {
+      fail(`${where}: severity is judged over every finding, so a rule cannot set it`);
+    }
+    if (!judgesSeverity && typeof entry.severity !== "string") fail(`${where}: severity must be a string`);
     const when = parseWhen(entry.when as string);
     const title = parseTemplate(entry.title as string);
 
@@ -185,7 +213,7 @@ export function parsePolicy(text: string, source = "policy"): Policy {
     return {
       when,
       title,
-      severity: entry.severity as string,
+      severity: entry.severity as string | undefined,
       scope,
       evidence: scope === "page" ? pageEvidence(pathsOfWhen(when)) : { key: scope, path: [scope] },
     };
@@ -198,15 +226,19 @@ function parseJudgment(name: string, spec: unknown, fail: (message: string) => n
   if (!isRecord(spec)) return fail("expected type, over and instructions");
   for (const key of Object.keys(spec)) if (!JUDGMENT_FIELDS.includes(key)) fail(`unknown field "${key}"`);
   if (spec.type !== "choice" && spec.type !== "noul") fail(`type must be "choice" or "noul"`);
-  if (!SCOPES.includes(spec.over as Scope)) fail(`over must be one of ${SCOPES.join(", ")}`);
+  if (!OVERS.includes(spec.over as Over)) fail(`over must be one of ${OVERS.join(", ")}`);
+  if (spec.over === "finding") {
+    if (name !== OVER_FINDING) fail(`over finding is read as the "${OVER_FINDING}" of every finding, under no other name`);
+    if (spec.type !== "choice") fail(`over finding must be a choice, one criterion per level`);
+  }
   if (typeof spec.instructions !== "string" || spec.instructions.trim() === "") {
     fail("instructions must say what Jev decides");
   }
   const judgment: Judgment = {
     name,
     type: spec.type,
-    over: spec.over as Scope,
-    instructions: spec.instructions,
+    over: spec.over as Over,
+    instructions: parseTemplate(spec.instructions),
   };
   if (spec.type === "noul") {
     if (spec.criteria !== undefined) fail("a noul answers its instructions on its own and takes no criteria");
