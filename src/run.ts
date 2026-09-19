@@ -22,6 +22,8 @@ export interface RunOptions {
   out: string;
   allow: Allow;
   model: string;
+  record?: string;
+  human: boolean;
 }
 
 export interface RunResult {
@@ -31,6 +33,7 @@ export interface RunResult {
   actions: number;
   snapshot: string;
   out: string;
+  record: string | null;
   reason: string | null;
 }
 
@@ -68,7 +71,7 @@ export function defaultOut(): string {
 export function defaultDeps(options: RunOptions): Deps {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
-  return { browser: agentBrowser(options.session), jev: httpJev(apiKey) };
+  return { browser: agentBrowser(options.session, options.human), jev: httpJev(apiKey) };
 }
 
 function stuck(history: Step[]): boolean {
@@ -125,6 +128,7 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
           steps,
           actions: history.length,
           out: options.out,
+          record: options.record ?? null,
           model: options.model,
           reason,
           startedAt,
@@ -138,6 +142,7 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
   await write(null);
 
   if (options.url !== undefined) await browser.run(["open", options.url]);
+  if (options.record !== undefined) await browser.run(["record", "start", options.record, "--cursor"]);
 
   while (steps < options.maxSteps) {
     observation = await observe(browser);
@@ -211,7 +216,7 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
       break;
     }
 
-    const command = commandFor(decision) as string[];
+    const command = commandFor(decision, options.human) as string[];
     try {
       await browser.run(command);
     } catch (error) {
@@ -224,6 +229,7 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
     await write(step);
   }
 
+  if (options.record !== undefined) await browser.run(["record", "stop"]);
   observation ??= await observe(browser);
   if (status !== "done") status = "blocked";
   await write(null);
@@ -234,6 +240,7 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
     actions: history.length,
     snapshot: observation.text,
     out: options.out,
+    record: options.record ?? null,
     reason,
   };
 }

@@ -1,11 +1,14 @@
 import type { Decision } from "./decide.js";
 
-/** The agent-browser command one decision runs, or null when the run stops instead. */
-export function commandFor(decision: Decision): string[] | null {
+/**
+ * The agent-browser command one decision runs, or null when the run stops instead.
+ * `human` approaches a click along an eased curve instead of jumping to it.
+ */
+export function commandFor(decision: Decision, human: boolean): string[] | null {
   const ref = `@${decision.ref}`;
   switch (decision.operation) {
     case "CLICK":
-      return ["click", ref];
+      return human ? ["click", ref, "--human"] : ["click", ref];
     case "TYPE_TEXT":
       return ["fill", ref, decision.value ?? ""];
     case "SELECT":

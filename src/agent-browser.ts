@@ -14,13 +14,23 @@ interface Reply {
   error: string | null;
 }
 
-/** Binds the `agent-browser` binary on PATH to one session. */
-export function agentBrowser(session: string): AgentBrowser {
+type Exec = (
+  file: string,
+  args: string[],
+  options: { maxBuffer: number },
+) => Promise<{ stdout: string }>;
+
+/**
+ * Binds the `agent-browser` binary on PATH to one session. Pointer movement is a session setting,
+ * so `human` rides on every command, not only on the ones that move the pointer.
+ */
+export function agentBrowser(session: string, human = false, exec: Exec = execFileAsync): AgentBrowser {
+  const sessionArgs = ["--session", session, "--json", ...(human ? ["--input-mode", "human"] : [])];
   return {
     async run(args) {
-      const { stdout } = await execFileAsync(
+      const { stdout } = await exec(
         "agent-browser",
-        ["--session", session, "--json", ...args],
+        [...sessionArgs, ...args],
         { maxBuffer: 64 * 1024 * 1024 },
       );
       const reply = JSON.parse(stdout) as Reply;

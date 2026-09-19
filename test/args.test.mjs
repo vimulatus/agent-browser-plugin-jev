@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { resolve } from "node:path";
 import { parseRunArgs } from "../dist/args.js";
 
 const SESSION = ["--session", "jev-test"];
@@ -51,4 +52,17 @@ test("a second goal, an unknown option and a bad step count are usage errors", (
 
 test("--max-steps 0 parses, so a policy can judge the current page without moving", () => {
   assert.equal(parseRunArgs(["g", ...SESSION, "--max-steps", "0"]).maxSteps, 0);
+});
+
+test("--record resolves against the working directory and --human takes no value", () => {
+  const options = parseRunArgs(["g", ...SESSION, "--record", "out.webm", "--human", "--max-steps", "3"]);
+  assert.equal(options.record, resolve("out.webm"));
+  assert.equal(options.human, true);
+  assert.equal(options.maxSteps, 3);
+});
+
+test("a run records nothing and jumps the pointer unless asked", () => {
+  const options = parseRunArgs(["g", ...SESSION]);
+  assert.equal(options.record, undefined);
+  assert.equal(options.human, false);
 });
