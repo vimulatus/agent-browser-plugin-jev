@@ -31,7 +31,19 @@
           "probabilities": { "1": 0.1, "2": 0.9 },
           "confidence": 0.9
         },
-        "type_text_value": {
+        "type_text_value_1": {
+          "type": "choice",
+          "choice": "alice@example.com",
+          "probabilities": {
+            "alice@example.com": 0.88,
+            "password secret": 0.03,
+            "password": 0.03,
+            "secret": 0.05,
+            "NONE": 0.01
+          },
+          "confidence": 0.88
+        },
+        "type_text_value_2": {
           "type": "choice",
           "choice": "secret",
           "probabilities": {

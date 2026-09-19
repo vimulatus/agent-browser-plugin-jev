@@ -26,6 +26,7 @@ export interface Decision {
   label: string | null;
   value: string | null;
   valueProbability: number | null;
+  valueProbabilities: Record<string, number>;
   password: boolean;
   destructive: { probability: number; verb: string | null } | null;
   confidence: number;
@@ -57,17 +58,25 @@ function describe(element: Element): Record<string, unknown> {
 /** A Choice question takes at most 255 options (docs.typesafe.ai/primitives/choice). */
 const MAX_TARGETS = 250;
 
+/**
+ * Every typeable target carries its own value question, so the first this many fields of a page are
+ * offered and the rest are not. A request holds 64k tokens (docs.typesafe.ai/models), and a value
+ * question restates every span of the goal.
+ */
+export const MAX_TYPE_TEXT_TARGETS = 20;
+
 function targetsFor(elements: Element[], operation: ElementOperation): Map<string, Target> {
   const targets = new Map<string, Target>();
+  const limit = operation === "TYPE_TEXT" ? MAX_TYPE_TEXT_TARGETS : MAX_TARGETS;
   for (const element of elements) {
-    if (targets.size >= MAX_TARGETS) break;
+    if (targets.size >= limit) break;
     if (!element.operations.includes(operation)) continue;
     if (operation !== "SELECT") {
       targets.set(element.index, { element, criteria: describe(element) });
       continue;
     }
     for (const option of element.options ?? []) {
-      if (targets.size >= MAX_TARGETS) break;
+      if (targets.size >= limit) break;
       targets.set(option.index, {
         element,
         option,
@@ -86,6 +95,11 @@ function criteriaOf(targets: Map<string, Target>): Criteria {
   return Object.fromEntries([...targets].map(([index, target]) => [index, target.criteria]));
 }
 
+/** The value question that belongs to one typeable target. */
+function valueKey(index: string): string {
+  return `type_text_value_${index}`;
+}
+
 function targetQuestion(operation: ElementOperation, targets: Map<string, Target>): Question {
   return { type: "choice", criteria: criteriaOf(targets), instructions: { operation, rules: [NEXT_ACTION, TARGET] } };
 }
@@ -102,8 +116,8 @@ export interface DecideInput {
 
 /**
  * One System One request per step. It picks the operation, a target for every operation that has one,
- * the value span for a field it may type into, and whether clicking is irreversible. The speculative
- * answers for operations Jev did not pick are never read.
+ * the span of the goal that belongs in each field it may type into, and whether clicking is irreversible.
+ * The speculative answers for the operations and fields Jev did not pick are never read.
  */
 export async function decide(input: DecideInput): Promise<Decision> {
   const { jev, goal, observation, spans, allow } = input;
@@ -123,14 +137,15 @@ export async function decide(input: DecideInput): Promise<Decision> {
   for (const [operation, targets] of byOperation) {
     questions[`${operation.toLowerCase()}_target`] = targetQuestion(operation, targets);
   }
-  if (byOperation.has("TYPE_TEXT")) {
-    questions.type_text_value = {
+  const valueCriteria: Criteria = {
+    ...Object.fromEntries(spans.map((span) => [span, null])),
+    [NO_VALUE]: "No span of the goal belongs in that field.",
+  };
+  for (const [index, target] of byOperation.get("TYPE_TEXT") ?? []) {
+    questions[valueKey(index)] = {
       type: "choice",
-      criteria: {
-        ...Object.fromEntries(spans.map((span) => [span, null])),
-        [NO_VALUE]: "No span of the goal belongs in that field.",
-      },
-      instructions: { rules: VALUE },
+      criteria: valueCriteria,
+      instructions: { field: target.criteria, rules: VALUE },
     };
   }
   const gated = allow !== "all" && byOperation.has("CLICK");
@@ -168,6 +183,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
     label: null,
     value: null,
     valueProbability: null,
+    valueProbabilities: {},
     password: false,
     destructive: null,
     confidence: answer.confidence,
@@ -187,12 +203,12 @@ export async function decide(input: DecideInput): Promise<Decision> {
     decision.label = target.element.label;
     decision.password = target.element.password === true;
     if (target.option !== undefined) decision.value = target.option.value;
-  }
-
-  if (operation === "TYPE_TEXT") {
-    const value = choiceOf(reply.answers, "type_text_value", [...spans, NO_VALUE]);
-    decision.valueProbability = value.probabilities[value.choice];
-    decision.value = value.choice === NO_VALUE ? null : value.choice;
+    if (operation === "TYPE_TEXT") {
+      const value = choiceOf(reply.answers, valueKey(picked.choice), [...spans, NO_VALUE]);
+      decision.valueProbability = value.probabilities[value.choice];
+      decision.valueProbabilities = value.probabilities;
+      decision.value = value.choice === NO_VALUE ? null : value.choice;
+    }
   }
 
   if (operation === "CLICK" && gated) {

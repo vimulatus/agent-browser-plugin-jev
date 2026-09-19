@@ -19,11 +19,11 @@ Use the user's entire \`goal\`, field values, nearby text, and recent actions. T
 a target for that operation; another question decides which operation to execute. Do not choose
 a field that already contains the requested value. Choose only an offered element index.`;
 
-export const VALUE = `Choose the span of the user's \`goal\` that belongs in this field.
-Assume the next operation is TYPE_TEXT and the field is the one the \`type_text_target\` question chooses
-for this \`goal\` on this page. The spans are quoted from the \`goal\`; no other text can be typed.
-Match the field's label, role and nearby text to the meaning of the span: an address bar takes a URL,
-a password field takes the password named in the \`goal\`. Choose NONE when no span belongs in that field.`;
+export const VALUE = `Choose the span of the user's \`goal\` that belongs in \`field\`, the one field this question
+asks about. Assume the next operation is TYPE_TEXT into that field. The spans are quoted from the \`goal\`;
+no other text can be typed. Match the field's label, role and nearby text to the meaning of the span:
+an address bar takes a URL, a password field takes the password named in the \`goal\`, an email field takes
+the email address. Choose NONE when no span belongs in that field, or it already holds the requested value.`;
 
 export const DESTRUCTIVE = `Assume the next operation is CLICK and the control is the one the \`click_target\`
 question chooses for this \`goal\` on this page. Does activating that control delete data, send a message,

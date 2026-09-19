@@ -31,7 +31,7 @@
           "probabilities": { "1": 1 },
           "confidence": 1
         },
-        "type_text_value": {
+        "type_text_value_1": {
           "type": "choice",
           "choice": "NONE",
           "probabilities": { "2024": 0.3, "NONE": 0.7 },

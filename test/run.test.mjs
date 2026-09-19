@@ -69,6 +69,21 @@ test("the typed password is masked in the run log", async (t) => {
   assert.equal(password.value, "•••");
 });
 
+test("each typed step logs the probability of every offered value", async (t) => {
+  const { out } = await drive("login");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  const [email, password, click] = steps(out);
+  assert.deepEqual(email.valueProbabilities, {
+    "alice@example.com": 0.9,
+    "password secret": 0.02,
+    password: 0.03,
+    secret: 0.04,
+    NONE: 0.01,
+  });
+  assert.equal(password.valueProbabilities.secret, 0.84);
+  assert.deepEqual(click.valueProbabilities, {});
+});
+
 test("a destructive target is skipped without --allow", async (t) => {
   const { result, browser, out } = await drive("destructive");
   t.after(() => rmSync(out, { recursive: true, force: true }));

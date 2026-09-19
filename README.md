@@ -26,7 +26,7 @@ It prints `{ status, url, steps, actions, snapshot, out, record, reason }` as JS
 | `--record <file>` | Records the run to this `.webm` or `.mp4`, cursor included |
 | `--human` | Moves the pointer along a curve instead of jumping to each target |
 
-One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, a Choice of which span of the goal belongs in a field, and a Noul for whether the click is irreversible. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
+One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
 
 The run writes `observed.jsonl` (the page at every step), `inferred.jsonl` (the decision at every step, executed or not) and `status.json` to `--out`.
 

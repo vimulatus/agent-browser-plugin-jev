@@ -31,7 +31,7 @@
           "probabilities": { "1": 0.95, "2": 0.05 },
           "confidence": 0.95
         },
-        "type_text_value": {
+        "type_text_value_1": {
           "type": "choice",
           "choice": "alice@example.com",
           "probabilities": {
@@ -42,6 +42,18 @@
             "NONE": 0.01
           },
           "confidence": 0.9
+        },
+        "type_text_value_2": {
+          "type": "choice",
+          "choice": "secret",
+          "probabilities": {
+            "alice@example.com": 0.02,
+            "password secret": 0.06,
+            "password": 0.05,
+            "secret": 0.86,
+            "NONE": 0.01
+          },
+          "confidence": 0.86
         },
         "action_is_destructive": { "type": "noul", "noul": 0.04 },
         "destructive_verb": {
@@ -82,7 +94,19 @@
           "probabilities": { "1": 0.06, "2": 0.94 },
           "confidence": 0.94
         },
-        "type_text_value": {
+        "type_text_value_1": {
+          "type": "choice",
+          "choice": "NONE",
+          "probabilities": {
+            "alice@example.com": 0.18,
+            "password secret": 0.02,
+            "password": 0.02,
+            "secret": 0.03,
+            "NONE": 0.75
+          },
+          "confidence": 0.75
+        },
+        "type_text_value_2": {
           "type": "choice",
           "choice": "secret",
           "probabilities": {
@@ -133,15 +157,27 @@
           "probabilities": { "1": 0.6, "2": 0.4 },
           "confidence": 0.6
         },
-        "type_text_value": {
+        "type_text_value_1": {
           "type": "choice",
-          "choice": "alice@example.com",
+          "choice": "NONE",
           "probabilities": {
-            "alice@example.com": 0.6,
-            "password secret": 0.1,
-            "password": 0.1,
-            "secret": 0.15,
-            "NONE": 0.05
+            "alice@example.com": 0.2,
+            "password secret": 0.05,
+            "password": 0.05,
+            "secret": 0.05,
+            "NONE": 0.65
+          },
+          "confidence": 0.65
+        },
+        "type_text_value_2": {
+          "type": "choice",
+          "choice": "NONE",
+          "probabilities": {
+            "alice@example.com": 0.05,
+            "password secret": 0.05,
+            "password": 0.05,
+            "secret": 0.25,
+            "NONE": 0.6
           },
           "confidence": 0.6
         },

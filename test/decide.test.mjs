@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { decide } from "../dist/decide.js";
+import { decide, MAX_TYPE_TEXT_TARGETS } from "../dist/decide.js";
 import { parseSnapshot } from "../dist/snapshot.js";
 import { valueSpans } from "../dist/spans.js";
 import { pages, replay, replayingJev } from "./helpers.mjs";
@@ -39,7 +39,7 @@ function input(jev, overrides = {}) {
   };
 }
 
-test("one request offers the operation, a target per operation, the value and the gate", async () => {
+test("one request offers the operation, a target per operation, a value per field and the gate", async () => {
   const jev = replayingJev(replay("login"));
   const decision = await decide(input(jev));
   const [request] = jev.requests;
@@ -49,7 +49,8 @@ test("one request offers the operation, a target per operation, the value and th
     "destructive_verb",
     "operation",
     "type_text_target",
-    "type_text_value",
+    "type_text_value_1",
+    "type_text_value_2",
   ]);
   assert.deepEqual(Object.keys(request.questions.operation.criteria), [
     "CLICK",
@@ -62,7 +63,7 @@ test("one request offers the operation, a target per operation, the value and th
   ]);
   assert.deepEqual(Object.keys(request.questions.click_target.criteria), ["1", "2", "3", "4"]);
   assert.deepEqual(Object.keys(request.questions.type_text_target.criteria), ["1", "2"]);
-  assert.deepEqual(Object.keys(request.questions.type_text_value.criteria), [
+  assert.deepEqual(Object.keys(request.questions.type_text_value_1.criteria), [
     "alice@example.com",
     "password secret",
     "password",
@@ -75,6 +76,26 @@ test("one request offers the operation, a target per operation, the value and th
   assert.equal(decision.ref, "e5");
   assert.equal(decision.value, "alice@example.com");
   assert.equal(decision.valueProbability, 0.9);
+  assert.equal(decision.valueProbabilities["secret"], 0.04);
+});
+
+test("each value question names its own field, and the chosen field's answer is the one read", async () => {
+  const jev = replayingJev(replay("login"));
+  await decide(input(jev));
+  const { type_text_value_1, type_text_value_2 } = jev.requests[0].questions;
+  assert.deepEqual(type_text_value_1.instructions.field, {
+    element: "[1] Email",
+    current_value: "",
+    role: "textbox",
+  });
+  assert.equal(type_text_value_2.instructions.field.element, "[2] Password");
+  assert.equal(type_text_value_2.instructions.field.password, true);
+
+  const password = replayingJev(replay("login").slice(1));
+  const decision = await decide(input(password));
+  assert.equal(decision.target, "2");
+  assert.equal(decision.value, "secret");
+  assert.equal(decision.valueProbability, 0.84);
 });
 
 test("a password field is offered and marked, and its value never reaches the request", async () => {
@@ -97,8 +118,36 @@ test("--allow all leaves the destructive questions out of the request", async ()
     "click_target",
     "operation",
     "type_text_target",
-    "type_text_value",
+    "type_text_value_1",
+    "type_text_value_2",
   ]);
+});
+
+test("a form with many fields offers the first MAX_TYPE_TEXT_TARGETS, each with its own value question", async () => {
+  const fields = Array.from({ length: 30 }, (_, i) => `- textbox "Field ${i}" [ref=f${i}]`).join("\n");
+  const jev = ask({
+    operation: {
+      type: "choice",
+      choice: "BLOCKED",
+      probabilities: {
+        CLICK: 0.05,
+        TYPE_TEXT: 0.07,
+        SCROLL_UP: 0.02,
+        SCROLL_DOWN: 0.02,
+        WAIT: 0.02,
+        DONE: 0.04,
+        BLOCKED: 0.78,
+      },
+      confidence: 0.78,
+    },
+  });
+  await decide(input(jev, { observation: observation(fields), allow: "all" }));
+  const { questions } = jev.requests[0];
+  const values = Object.keys(questions).filter((key) => key.startsWith("type_text_value_"));
+  assert.equal(values.length, MAX_TYPE_TEXT_TARGETS);
+  const fieldsAsked = values.map((key) => key.replace("type_text_value_", "")).sort();
+  assert.deepEqual(Object.keys(questions.type_text_target.criteria).sort(), fieldsAsked);
+  assert.equal(Object.keys(questions.click_target.criteria).length, 30, "only the typeable targets are capped");
 });
 
 test("a goal with no value span does not offer TYPE_TEXT", async () => {
@@ -115,7 +164,7 @@ test("a goal with no value span does not offer TYPE_TEXT", async () => {
   const decision = await decide(input(jev, { goal: "open the report", spans: [] }));
   const criteria = jev.requests[0].questions.operation.criteria;
   assert.ok(!("TYPE_TEXT" in criteria));
-  assert.ok(!("type_text_value" in jev.requests[0].questions));
+  assert.ok(!Object.keys(jev.requests[0].questions).some((key) => key.startsWith("type_text_value")));
   assert.equal(decision.operation, "CLICK");
   assert.deepEqual(decision.destructive, { probability: 0.1, verb: null });
 });
