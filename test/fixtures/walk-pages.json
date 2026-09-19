@@ -121,5 +121,45 @@
       "title": "Create account",
       "snapshot": "- heading \"Create account\" [level=1, ref=e1]\n- button \"Sign in with SSO\" [ref=e2]"
     }
+  ],
+  "orders-500": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Something went wrong\" [ref=e2]",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:8765/api/orders",
+          "status": 500,
+          "resourceType": "Fetch",
+          "mimeType": "application/json",
+          "timestamp": 1789804879926
+        }
+      ]
+    }
+  ],
+  "orders-500-loading": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Loading orders\" [ref=e2]",
+      "requests": []
+    },
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- paragraph \"Something went wrong\" [ref=e2]",
+      "requests": [
+        {
+          "method": "GET",
+          "url": "http://127.0.0.1:8765/api/orders",
+          "status": 500,
+          "resourceType": "Fetch",
+          "mimeType": "application/json",
+          "timestamp": 1789804879926
+        }
+      ]
+    }
   ]
 }

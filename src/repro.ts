@@ -64,8 +64,9 @@ async function page(browser: AgentBrowser) {
 
 /**
  * Replays the actions that led to a finding on a fresh tab from the same start, under a recording with a cursor
- * and a screenshot after every act. A control the page no longer offers, or a policy that stays quiet on the
- * page the replay lands on, makes the finding a one-off: it is kept, unreproduced.
+ * and a screenshot after every act. The start page is given until the network goes quiet, so a finding raised by
+ * a request the page makes on load is seen again. A control the page no longer offers, or a policy that stays
+ * quiet on the page the replay lands on, makes the finding a one-off: it is kept, unreproduced.
  */
 export async function reproduce(input: ReproInput): Promise<Reproduction> {
   const { browser, number, fixtures } = input;
@@ -73,12 +74,17 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
   await mkdir(evidence, { recursive: true });
   const recording = join(evidence, `${number}.webm`);
 
-  // The buffers hold what every earlier replay printed, and this finding quotes only its own.
+  // The buffers hold what every earlier replay printed and asked for, and this finding quotes only its own.
   await browser.run(["console", "--clear"]);
   await browser.run(["errors", "--clear"]);
-  await browser.run(["tab", "new", input.home]);
+  await browser.run(["network", "requests", "--clear"]);
+  // agent-browser 0.38.1 logs no request for the navigation `tab new <url>` makes, so the tab opens blank.
+  await browser.run(["tab", "new", "about:blank"]);
   await browser.run(["record", "start", recording, "--cursor"]);
   try {
+    await browser.run(["open", input.home]);
+    // A request the page makes on load answers after its load event, and the finding can be that request.
+    await browser.run(["wait", "--load", "networkidle"]);
     const replayed: ReproAction[] = [];
     let previous: Previous | undefined;
     for (const action of input.actions) {
