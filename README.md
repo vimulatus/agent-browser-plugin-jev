@@ -8,14 +8,10 @@ The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/iss
 
 You need Node 20 or newer, the `agent-browser` binary on PATH, and a TypeSafe API key.
 
-### From any directory
-
-Clone, build and link the command, then register it once for the machine:
+### Once for the machine
 
 ```bash
-git clone https://github.com/vimulatus/agent-browser-plugin-jev
-cd agent-browser-plugin-jev
-pnpm install && pnpm build && npm link
+npm i -g agent-browser-plugin-jev
 ```
 
 Put this in `~/.agent-browser/config.json`:
@@ -39,15 +35,15 @@ agent-browser plugin run jev jev.status --payload '{"runId":"x"}'
 # Plugin 'jev' failed: no run x
 ```
 
-After a `git pull`, run `pnpm build` again. The linked command runs `dist/`, and only the build writes it.
+Run the same command again to upgrade.
 
 ### In one project
 
 ```bash
-agent-browser plugin add vimulatus/agent-browser-plugin-jev
+agent-browser plugin add agent-browser-plugin-jev
 ```
 
-This writes `./agent-browser.json` in the current directory, so every project registers the plugin again, and it registers the command as `npx -y github:vimulatus/agent-browser-plugin-jev`. In a project whose `package.json` pins a package manager other than npm through `devEngines`, npm refuses to run anything and the plugin never starts:
+This writes `./agent-browser.json` in the current directory, so every project registers the plugin again, and it registers the command as `npx -y agent-browser-plugin-jev`. In a project whose `package.json` pins a package manager other than npm through `devEngines`, npm refuses to run anything and the plugin never starts:
 
 ```
 Plugin 'jev' exited unsuccessfully.
@@ -55,7 +51,17 @@ npm error code EBADDEVENGINES
 npm error EBADDEVENGINES Invalid name "bun" does not match "npm" for "packageManager"
 ```
 
-`plugin add --global` writes the same `npx` command into `~/.agent-browser/config.json` and fails the same way. In a bun or yarn project, install from any directory instead.
+`plugin add --global` writes the same `npx` command into `~/.agent-browser/config.json` and fails the same way. In a bun or yarn project, install once for the machine instead.
+
+### From source
+
+```bash
+git clone https://github.com/vimulatus/agent-browser-plugin-jev
+cd agent-browser-plugin-jev
+pnpm install && pnpm build && npm link
+```
+
+`npm link` puts the same `agent-browser-plugin-jev` command on PATH, so the config entry above is unchanged. After a `git pull`, run `pnpm build` again: the command runs `dist/`, and only the build writes it.
 
 ### The key
 

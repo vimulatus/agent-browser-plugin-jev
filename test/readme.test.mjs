@@ -20,6 +20,11 @@ function documents(text, token) {
   return text.includes(`\`${token}\``);
 }
 
+test("the README names the install command from npm", () => {
+  const install = `npm i -g ${JSON.parse(readFileSync(`${root}package.json`, "utf8")).name}`;
+  assert.ok(readme.includes(install), `README does not name ${install}`);
+});
+
 test("the README names every run flag", () => {
   assert.ok(flags.length >= 10, `read ${flags.length} flags out of USAGE`);
   for (const flag of flags) assert.ok(documents(readme, flag), `README does not name ${flag}`);
@@ -51,7 +56,14 @@ test("SKILL.md carries the install, the policy grammar and both run forms", () =
   for (const collection of COLLECTIONS) {
     assert.ok(documents(skill, collection), `SKILL.md does not name collect: ${collection}`);
   }
-  for (const token of ["npm link", "~/.agent-browser/config.json", "--policy", "--max-steps", "findings.json"]) {
+  for (const token of [
+    "npm i -g agent-browser-plugin-jev",
+    "npm link",
+    "~/.agent-browser/config.json",
+    "--policy",
+    "--max-steps",
+    "findings.json",
+  ]) {
     assert.ok(skill.includes(token), `SKILL.md does not name ${token}`);
   }
 });

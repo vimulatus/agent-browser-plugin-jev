@@ -9,12 +9,10 @@ One command reaches a page. One policy file turns what the browser shows into fi
 
 ## Install
 
-From any directory, including a bun or yarn project:
+Once for the machine, and it works from any directory, including a bun or yarn project:
 
 ```bash
-git clone https://github.com/vimulatus/agent-browser-plugin-jev
-cd agent-browser-plugin-jev
-pnpm install && pnpm build && npm link
+npm i -g agent-browser-plugin-jev
 ```
 
 Then write `~/.agent-browser/config.json`:
@@ -31,9 +29,11 @@ Then write `~/.agent-browser/config.json`:
 }
 ```
 
-Check it: `agent-browser plugin run jev jev.status --payload '{"runId":"x"}'` answers `no run x`. After a `git pull`, run `pnpm build` again.
+Check it: `agent-browser plugin run jev jev.status --payload '{"runId":"x"}'` answers `no run x`.
 
-`agent-browser plugin add vimulatus/agent-browser-plugin-jev` is the per-project form. It registers `npx -y github:...` in `./agent-browser.json`, which npm refuses to run in a project whose `package.json` pins another package manager through `devEngines` (`EBADDEVENGINES`).
+`agent-browser plugin add agent-browser-plugin-jev` is the per-project form. It registers `npx -y agent-browser-plugin-jev` in `./agent-browser.json`, which npm refuses to run in a project whose `package.json` pins another package manager through `devEngines` (`EBADDEVENGINES`).
+
+From source instead: clone the repo, `pnpm install && pnpm build && npm link`, and run `pnpm build` again after a `git pull`. The config entry above is unchanged.
 
 Export `TYPESAFE_API_KEY` in the shell that runs `agent-browser`. A policy with no `judge` section needs no key.
 
