@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +25,9 @@ export interface RunOptions {
   record?: string;
   human: boolean;
 }
+
+/** What `<out>/status.json` reports while the run is in flight and once it has ended. */
+export type RunStatus = "running" | "done" | "blocked" | "failed";
 
 export interface RunResult {
   status: "done" | "blocked";
@@ -105,8 +108,7 @@ function recent(history: Step[]): Recent[] {
  * and the page is re-hashed before the act, so a page that moved is re-decided instead of acted on.
  * A mutation is never retried: the step is recorded once, whether it ran, was skipped or failed.
  */
-export async function run(options: RunOptions, deps: Deps = defaultDeps(options)): Promise<RunResult> {
-  const { browser, jev } = deps;
+export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
   const startedAt = new Date().toISOString();
@@ -116,13 +118,14 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
   let steps = 0;
 
   await mkdir(options.out, { recursive: true });
-  const write = async (step: Step | null) => {
+  const write = async (state: RunStatus, step: Step | null = null) => {
     if (step !== null) await appendFile(join(options.out, "inferred.jsonl"), `${JSON.stringify(step)}\n`);
+    const path = join(options.out, "status.json");
     await writeFile(
-      join(options.out, "status.json"),
+      `${path}.tmp`,
       `${JSON.stringify(
         {
-          status: step === null ? status : "running",
+          status: state,
           goal: options.goal,
           url: observation?.url ?? null,
           steps,
@@ -138,109 +141,128 @@ export async function run(options: RunOptions, deps: Deps = defaultDeps(options)
         2,
       )}\n`,
     );
+    await rename(`${path}.tmp`, path);
   };
-  await write(null);
+  await write("running");
 
-  if (options.url !== undefined) await browser.run(["open", options.url]);
-  if (options.record !== undefined) await browser.run(["record", "start", options.record, "--cursor"]);
+  let browser: AgentBrowser | null = null;
+  let recording = false;
+  try {
+    const deps = injected ?? defaultDeps(options);
+    const jev = deps.jev;
+    browser = deps.browser;
 
-  while (steps < options.maxSteps) {
-    observation = await observe(browser);
-    const previous = history.at(-1);
-    if (previous !== undefined && previous.pageChanged === null) {
-      previous.pageChanged = observation.hash !== previous.hash;
+    if (options.url !== undefined) await browser.run(["open", options.url]);
+    if (options.record !== undefined) {
+      await browser.run(["record", "start", options.record, "--cursor"]);
+      recording = true;
     }
-    if (stuck(history)) {
-      reason = `${STUCK} actions in a row left the page unchanged`;
-      break;
-    }
-    await appendFile(
-      join(options.out, "observed.jsonl"),
-      `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
-    );
 
-    const decision = await decide({
-      jev,
-      model: options.model,
-      goal: options.goal,
-      spans,
-      observation,
-      recent: recent(history),
-      allow: options.allow,
-    });
-    steps++;
-    const step: Step = {
-      step: steps,
-      hash: observation.hash,
-      operation: decision.operation,
-      target: decision.target,
-      label: decision.label,
-      value: logged(decision),
-      executed: false,
-      reason: null,
-      pageChanged: null,
-      confidence: decision.confidence,
-      probabilities: decision.probabilities,
-      targetProbabilities: decision.targetProbabilities,
-      destructive: decision.destructive,
-      latencyMs: decision.latencyMs,
-      usage: decision.usage,
-      model: decision.model,
+    while (steps < options.maxSteps) {
+      observation = await observe(browser);
+      const previous = history.at(-1);
+      if (previous !== undefined && previous.pageChanged === null) {
+        previous.pageChanged = observation.hash !== previous.hash;
+      }
+      if (stuck(history)) {
+        reason = `${STUCK} actions in a row left the page unchanged`;
+        break;
+      }
+      await appendFile(
+        join(options.out, "observed.jsonl"),
+        `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
+      );
+
+      const decision = await decide({
+        jev,
+        model: options.model,
+        goal: options.goal,
+        spans,
+        observation,
+        recent: recent(history),
+        allow: options.allow,
+      });
+      steps++;
+      const step: Step = {
+        step: steps,
+        hash: observation.hash,
+        operation: decision.operation,
+        target: decision.target,
+        label: decision.label,
+        value: logged(decision),
+        executed: false,
+        reason: null,
+        pageChanged: null,
+        confidence: decision.confidence,
+        probabilities: decision.probabilities,
+        targetProbabilities: decision.targetProbabilities,
+        destructive: decision.destructive,
+        latencyMs: decision.latencyMs,
+        usage: decision.usage,
+        model: decision.model,
+      };
+
+      if (decision.operation === "BLOCKED") {
+        reason = step.reason = "no supported operation can make progress";
+        await write("running", step);
+        break;
+      }
+      if (decision.operation === "TYPE_TEXT" && (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD)) {
+        reason = step.reason = `the goal holds no value for ${decision.label}`;
+        await write("running", step);
+        break;
+      }
+      const denied = blockedByGate(decision, options.allow);
+      if (denied !== null) {
+        step.reason = denied;
+        await write("running", step);
+        continue;
+      }
+      if ((await snapshotHash(browser)) !== observation.hash) {
+        step.reason = "the page changed between the decision and the act";
+        await write("running", step);
+        continue;
+      }
+      if (decision.operation === "DONE") {
+        status = "done";
+        reason = step.reason = "every requirement is visibly satisfied";
+        await write("running", step);
+        break;
+      }
+
+      const command = commandFor(decision, options.human) as string[];
+      try {
+        await browser.run(command);
+      } catch (error) {
+        reason = step.reason = `${command[0]} failed: ${(error as Error).message}`;
+        await write("running", step);
+        break;
+      }
+      step.executed = true;
+      history.push(step);
+      await write("running", step);
+    }
+
+    if (recording) {
+      await browser.run(["record", "stop"]);
+      recording = false;
+    }
+    observation ??= await observe(browser);
+    await write(status);
+    return {
+      status,
+      url: observation.url,
+      steps,
+      actions: history.length,
+      snapshot: observation.text,
+      out: options.out,
+      record: options.record ?? null,
+      reason,
     };
-
-    if (decision.operation === "BLOCKED") {
-      reason = step.reason = "no supported operation can make progress";
-      await write(step);
-      break;
-    }
-    if (decision.operation === "TYPE_TEXT" && (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD)) {
-      reason = step.reason = `the goal holds no value for ${decision.label}`;
-      await write(step);
-      break;
-    }
-    const denied = blockedByGate(decision, options.allow);
-    if (denied !== null) {
-      step.reason = denied;
-      await write(step);
-      continue;
-    }
-    if ((await snapshotHash(browser)) !== observation.hash) {
-      step.reason = "the page changed between the decision and the act";
-      await write(step);
-      continue;
-    }
-    if (decision.operation === "DONE") {
-      status = "done";
-      reason = step.reason = "every requirement is visibly satisfied";
-      await write(step);
-      break;
-    }
-
-    const command = commandFor(decision, options.human) as string[];
-    try {
-      await browser.run(command);
-    } catch (error) {
-      reason = step.reason = `${command[0]} failed: ${(error as Error).message}`;
-      await write(step);
-      break;
-    }
-    step.executed = true;
-    history.push(step);
-    await write(step);
+  } catch (error) {
+    reason = (error as Error).message;
+    if (recording && browser !== null) await browser.run(["record", "stop"]).catch(() => {});
+    await write("failed");
+    throw error;
   }
-
-  if (options.record !== undefined) await browser.run(["record", "stop"]);
-  observation ??= await observe(browser);
-  if (status !== "done") status = "blocked";
-  await write(null);
-  return {
-    status,
-    url: observation.url,
-    steps,
-    actions: history.length,
-    snapshot: observation.text,
-    out: options.out,
-    record: options.record ?? null,
-    reason,
-  };
 }
