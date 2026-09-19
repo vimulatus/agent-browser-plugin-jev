@@ -3,6 +3,7 @@ import { parseRunArgs, USAGE, UsageError } from "./args.js";
 import { answer } from "./protocol.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { defaultOut, run } from "./run.js";
+import { walk, type WalkOptions } from "./walk.js";
 
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return "";
@@ -19,8 +20,14 @@ async function main(argv: string[]): Promise<number> {
   }
   if (argv[0] === "run") {
     const options = parseRunArgs(argv.slice(1));
-    if (options.goal === "") throw new UsageError('run needs a goal: run "<goal>"');
+    if (options.goal === "" && options.policy === undefined) {
+      throw new UsageError('run needs a goal or a policy: run "<goal>", or run --policy <file>');
+    }
     if (options.out === "") options.out = defaultOut();
+    if (options.goal === "") {
+      process.stdout.write(`${JSON.stringify(await walk(options as WalkOptions))}\n`);
+      return 0;
+    }
     const result = await run(options);
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return result.status === "done" ? 0 : 2;

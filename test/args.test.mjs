@@ -66,3 +66,11 @@ test("a run records nothing and jumps the pointer unless asked", () => {
   assert.equal(options.record, undefined);
   assert.equal(options.human, false);
 });
+
+test("--policy and --fixtures ride on the same run command, and a walk takes no goal", () => {
+  const options = parseRunArgs([...SESSION, "--policy", "bug-hunt", "--fixtures", "./qa.yaml", "--allow", "all"]);
+  assert.equal(options.goal, "");
+  assert.equal(options.policy, "bug-hunt");
+  assert.equal(options.fixtures, "./qa.yaml");
+  assert.equal(options.allow, "all");
+});

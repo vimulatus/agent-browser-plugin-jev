@@ -1,0 +1,37 @@
+{
+  "pages": "dashboard",
+  "responses": [
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "next_element": {
+          "type": "choice",
+          "choice": "1",
+          "confidence": 0.66,
+          "probabilities": { "1": 0.66, "2": 0.34 }
+        },
+        "action_is_destructive": { "type": "noul", "noul": 0.96 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "delete",
+          "confidence": 0.89,
+          "probabilities": { "delete": 0.89, "send": 0.03, "pay": 0.02, "publish": 0.02, "submit": 0.04 }
+        }
+      },
+      "usage": { "input_tokens": 498, "output_tokens": 22 }
+    },
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "action_is_destructive": { "type": "noul", "noul": 0.03 },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "confidence": 0.41,
+          "probabilities": { "delete": 0.12, "send": 0.19, "pay": 0.05, "publish": 0.23, "submit": 0.41 }
+        }
+      },
+      "usage": { "input_tokens": 486, "output_tokens": 18 }
+    }
+  ]
+}
