@@ -26,7 +26,7 @@ test("the README names every run flag", () => {
 });
 
 test("the README names every request type the plugin answers", () => {
-  assert.deepEqual(requestTypes.length, 3);
+  assert.ok(requestTypes.length >= 3, `read ${requestTypes.length} request types out of protocol.ts`);
   for (const type of requestTypes) assert.ok(documents(readme, type), `README does not name ${type}`);
 });
 

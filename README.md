@@ -110,7 +110,7 @@ agent-browser --session jev-check open http://127.0.0.1:8765/orders.html
 agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-check
 ```
 
-It prints `{ findings, inferred }`: the findings the rules raised, and the path of the file holding every answer Jev gave. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
+It prints `{ findings, inferred }`: the findings the rules raised, and the path of the file holding every answer Jev gave. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
 
 ## Walk an app
 
@@ -300,7 +300,7 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 
 | Check | The command | Run for real |
 |---|---|---|
-| A goal run reaches its page | `run "log in as alice@example.com with password secret and open Settings" --url .../login.html` | Yes. Four steps, `status: "done"`, ending on `/settings.html` |
+| A goal run reaches its page | `run "log in as alice@example.com with password secret and open Settings" --url .../login.html` | Yes. Four actions, `status: "done"`, ending on `/settings.html` |
 | The protocol path answers in time | `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` | Yes, against agent-browser 0.38.1. The final status came back in 5.2 s |
 | A policy judges one page | `run --policy bug-hunt --max-steps 0 --session <name>` on a page that fetches a 500 and shows a banner | Yes, with `errors`, `perf` and `bug-hunt` on that page. `bug-hunt` raised two findings, and `inferred.jsonl` shows the probabilities behind them |
 | A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
