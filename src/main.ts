@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { answer } from "./protocol.js";
+import { judgePage, judgePageOptions } from "./policy/index.js";
 
 const USAGE = `agent-browser-plugin-jev
 
@@ -12,6 +13,13 @@ async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
   return Buffer.concat(chunks).toString("utf8");
+}
+
+const judge = judgePageOptions(process.argv.slice(2));
+if (judge) {
+  const report = JSON.stringify(await judgePage(judge)) + "\n";
+  await new Promise((flushed) => process.stdout.write(report, flushed));
+  process.exit(0);
 }
 
 const stdin = process.argv.length > 2 ? "" : await readStdin();

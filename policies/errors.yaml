@@ -1,0 +1,14 @@
+name: errors
+collect: [console, errors, requests, snapshot]
+measure:
+  http_status: { ok: "<400", client_error: "400-499", server_error: ">=500" }
+report:
+  - when: http_status == server_error
+    title: "{{request.method}} {{request.path}} returned {{request.status}}"
+    severity: high
+  - when: errors.any
+    title: "{{page.url}} throws {{errors[0].text}}"
+    severity: high
+  - when: console.errors.any
+    title: "{{page.url}} logs {{console.errors[0].text}}"
+    severity: medium
