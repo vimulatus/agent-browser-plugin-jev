@@ -39,6 +39,21 @@ agent-browser-plugin-jev run "log in as alice@example.com with password secret a
 
 `--record` starts `record start <file> --cursor` once the start page is open and stops it after the last step, and the result names the file. `--human` sets `--input-mode human` on every agent-browser call and clicks with `--human`, so the pointer eases from target to target. Neither flag sleeps: the CLI's own movement timing sets the pace. Recording needs ffmpeg on PATH — `agent-browser doctor` says whether you have it.
 
+## As a plugin
+
+Once `agent-browser plugin add` has registered it, an agent starts the same run through the protocol:
+
+```bash
+agent-browser plugin run jev jev.run --payload '{"goal":"open the settings page","wait":true}'
+agent-browser plugin run jev jev.status --payload '{"runId":"jev-run-2f9c1d40aa"}'
+```
+
+`jev.run` takes `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, out, wait }` and starts `run` as a detached worker, so a run outlives agent-browser's 60 s plugin timeout. It answers `{ runId, out, status: "running" }` at once; `wait: true` holds the answer for up to 55 s and returns the run's final status when it ends in time, and `wait: <milliseconds>` holds it for less.
+
+`jev.status` takes `{ runId }` or `{ out }` and answers with the run's `status.json`: `{ status, url, steps, actions, reason, ... }`, where `status` is `running`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed` with the last line of `<out>/worker.log`.
+
+The session comes from the payload, else from `$AGENT_BROWSER_SESSION` in the environment agent-browser passes down. Anything that goes wrong answers `{ success: false, error }`, and nothing but JSON reaches stdout.
+
 ## Checked by hand
 
 The paid API is never called from the test suite, so one check stays manual. It needs a real `TYPESAFE_API_KEY`.

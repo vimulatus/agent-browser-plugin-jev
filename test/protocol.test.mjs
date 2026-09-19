@@ -30,14 +30,14 @@ test("plugin.manifest names the plugin and its capabilities", () => {
 test("any other request type is rejected with success false", () => {
   const { status, body } = invoke({
     protocol: PROTOCOL,
-    type: "jev.run",
-    capability: "jev.run",
-    request: { goal: "open the docs" },
+    type: "jev.explain",
+    capability: "command.run",
+    request: {},
   });
   assert.equal(status, 0);
   assert.equal(body.protocol, PROTOCOL);
   assert.equal(body.success, false);
-  assert.match(body.error, /jev\.run/);
+  assert.match(body.error, /jev\.explain/);
 });
 
 test("an unknown protocol is rejected with success false", () => {
