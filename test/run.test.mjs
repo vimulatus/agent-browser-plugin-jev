@@ -175,6 +175,23 @@ test("--record without --human records the same run with an instant pointer", as
   assert.ok(!browser.state.calls.some((call) => call.includes("--human")));
 });
 
+test("a run that throws ends failed in status.json and still stops the recording", async (t) => {
+  const record = "/tmp/jev-record/failed.webm";
+  const browser = scriptedBrowser(pages("login"));
+  const served = browser.run.bind(browser);
+  browser.run = async (args) => {
+    if (args.join(" ") === "get title") throw new Error("the browser session is gone");
+    return served(args);
+  };
+  const run_options = options("log in", { record });
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+
+  await assert.rejects(run(run_options, { browser, jev: replayingJev([]) }), /the browser session is gone/);
+  assert.equal(status(run_options.out).status, "failed");
+  assert.match(status(run_options.out).reason, /the browser session is gone/);
+  assert.deepEqual(acts(browser), [`record start ${record} --cursor`, "record stop"]);
+});
+
 test("the recording starts on the page --url opened, not on the page before it", async (t) => {
   const record = "/tmp/jev-record/opened.webm";
   const { browser, out } = await drive("login", null, { record, url: "http://127.0.0.1:8765/login.html" });

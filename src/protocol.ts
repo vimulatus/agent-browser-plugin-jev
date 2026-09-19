@@ -1,3 +1,5 @@
+import { runStatus, startRun, type RunRequest, type RunState, type StatusRequest } from "./worker.js";
+
 export const PROTOCOL = "agent-browser.plugin.v1";
 
 /** What `agent-browser plugin add` records for this plugin. */
@@ -17,6 +19,7 @@ export interface Envelope {
 
 export type Response =
   | { protocol: typeof PROTOCOL; success: true; manifest: typeof MANIFEST }
+  | ({ protocol: typeof PROTOCOL; success: true } & RunState)
   | { protocol: typeof PROTOCOL; success: false; error: string };
 
 function failure(error: string): Response {
@@ -34,11 +37,18 @@ function parseEnvelope(stdin: string): Envelope | null {
   return typeof envelope?.type === "string" && typeof envelope.protocol === "string" ? envelope : null;
 }
 
-/** Answers the envelope on stdin. Only `plugin.manifest` is served. */
-export function answer(stdin: string): Response {
+/** Answers the envelope on stdin: the manifest, a run started, or a run's status. */
+export async function answer(stdin: string): Promise<Response> {
   const envelope = parseEnvelope(stdin);
   if (envelope === null) return failure("stdin is not a plugin envelope");
   if (envelope.protocol !== PROTOCOL) return failure(`unsupported protocol: ${envelope.protocol}`);
-  if (envelope.type === "plugin.manifest") return { protocol: PROTOCOL, success: true, manifest: MANIFEST };
+  const request = (envelope.request ?? {}) as RunRequest & StatusRequest;
+  try {
+    if (envelope.type === "plugin.manifest") return { protocol: PROTOCOL, success: true, manifest: MANIFEST };
+    if (envelope.type === "jev.run") return { protocol: PROTOCOL, success: true, ...(await startRun(request)) };
+    if (envelope.type === "jev.status") return { protocol: PROTOCOL, success: true, ...runStatus(request) };
+  } catch (error) {
+    return failure((error as Error).message);
+  }
   return failure(`unsupported request type: ${envelope.type}`);
 }

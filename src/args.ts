@@ -20,7 +20,8 @@ Drives the browser to the goal, one Jev request per step, and prints
   --human            Move the pointer along a curve instead of jumping
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
-With no arguments it speaks agent-browser.plugin.v1 on stdin. Register it with
+With no arguments it answers plugin.manifest, jev.run and jev.status on stdin,
+over agent-browser.plugin.v1. Register it with
   agent-browser plugin add vimulatus/agent-browser-plugin-jev
 `;
 

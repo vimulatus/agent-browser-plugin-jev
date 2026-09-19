@@ -31,7 +31,7 @@ async function main(argv: string[]): Promise<number> {
     process.stderr.write(USAGE);
     return 1;
   }
-  process.stdout.write(JSON.stringify(answer(stdin)));
+  process.stdout.write(JSON.stringify(await answer(stdin)));
   return 0;
 }
 
