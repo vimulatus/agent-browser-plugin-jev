@@ -145,7 +145,8 @@ test("a form with many fields offers the first MAX_TYPE_TEXT_TARGETS, each with 
   const { questions } = jev.requests[0];
   const values = Object.keys(questions).filter((key) => key.startsWith("type_text_value_"));
   assert.equal(values.length, MAX_TYPE_TEXT_TARGETS);
-  assert.deepEqual(Object.keys(questions.type_text_target.criteria).sort(), values.map((key) => key.slice(16)).sort());
+  const fieldsAsked = values.map((key) => key.replace("type_text_value_", "")).sort();
+  assert.deepEqual(Object.keys(questions.type_text_target.criteria).sort(), fieldsAsked);
   assert.equal(Object.keys(questions.click_target.criteria).length, 30, "only the typeable targets are capped");
 });
 
