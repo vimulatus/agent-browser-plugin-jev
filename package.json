@@ -1,6 +1,6 @@
 {
   "name": "agent-browser-plugin-jev",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "agent-browser plugin: Jev drives the browser from one goal or one policy",
   "type": "module",
   "license": "Apache-2.0",
@@ -14,7 +14,8 @@
   },
   "files": [
     "dist",
-    "policies"
+    "policies",
+    "SKILL.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
