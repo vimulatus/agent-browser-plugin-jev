@@ -21,6 +21,30 @@
       "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
     }
   ],
+  "login-console": [
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]",
+      "console": [{ "type": "error", "text": "Uncaught TypeError: cannot read properties of null" }]
+    },
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]: ••••••\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]",
+      "console": [{ "type": "error", "text": "Uncaught TypeError: cannot read properties of null" }]
+    },
+    {
+      "url": "http://127.0.0.1:8765/settings.html",
+      "title": "Settings",
+      "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
+    }
+  ],
   "destructive": [
     {
       "url": "http://127.0.0.1:8765/account.html",

@@ -5,8 +5,21 @@ import { join } from "node:path";
 import { commandFor } from "./act.js";
 import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
+import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
+import {
+  applyPolicy,
+  judge,
+  judgeFindings,
+  loadPolicy,
+  readContent,
+  typesafeJev,
+  type Gathered,
+  type Jev as PolicyJev,
+  type Policy,
+  type Previous,
+} from "./policy/index.js";
 import { valueSpans } from "./spans.js";
 
 export const DEFAULT_MAX_STEPS = 60;
@@ -37,6 +50,7 @@ export interface RunResult {
   url: string;
   steps: number;
   actions: number;
+  findings: number;
   snapshot: string;
   out: string;
   record: string | null;
@@ -47,6 +61,7 @@ export interface RunResult {
 export interface Deps {
   browser: AgentBrowser;
   jev: Jev;
+  policyJev: PolicyJev;
 }
 
 interface Step {
@@ -78,7 +93,11 @@ export function defaultOut(): string {
 export function defaultDeps(options: RunOptions): Deps {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
-  return { browser: agentBrowser(options.session, options.human), jev: httpJev(apiKey) };
+  return {
+    browser: agentBrowser(options.session, options.human),
+    jev: httpJev(apiKey),
+    policyJev: typesafeJev(options.model),
+  };
 }
 
 function stuck(history: Step[]): boolean {
@@ -98,6 +117,29 @@ function logged(decision: Decision): string | null {
   return decision.password && decision.value !== null ? MASK : decision.value;
 }
 
+/**
+ * The policy the run judges every step against, or null with no `--policy`. A HAR is recorded over a reload,
+ * which a run that is driving the page cannot do, so a policy that collects one is refused here.
+ */
+function policyOf(options: RunOptions): Policy | null {
+  if (options.policy === undefined) return null;
+  const policy = loadPolicy(options.policy);
+  if (policy.collect.includes("har")) {
+    throw new Error(
+      `policy ${options.policy}: a HAR is recorded over a reload, which a goal run cannot do; judge one page with --max-steps 0`,
+    );
+  }
+  return policy;
+}
+
+/** The act a policy reads as `action` on the page it leads to, or nothing: scrolling and waiting act on no control. */
+function actedOn(decision: Decision, hash: string): Previous | undefined {
+  const { operation, label } = decision;
+  if (label === null) return undefined;
+  if (operation !== "CLICK" && operation !== "TYPE_TEXT" && operation !== "SELECT") return undefined;
+  return { hash, action: { kind: operation, label } };
+}
+
 function recent(history: Step[]): Recent[] {
   return history.map(({ operation, label, value, pageChanged }) => ({
     operation,
@@ -111,10 +153,13 @@ function recent(history: Step[]): Recent[] {
  * Drives the browser to the goal, one Jev request per step. Every step is observed before the decision
  * and the page is re-hashed before the act, so a page that moved is re-decided instead of acted on.
  * A mutation is never retried: the step is recorded once, whether it ran, was skipped or failed.
+ * With `--policy` every page the run sees is judged against it before the decision, into `findings.json`.
  */
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
+  const policy = policyOf(options);
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
+  const findings: WalkFinding[] = [];
   const startedAt = new Date().toISOString();
   let observation: Observation | null = null;
   let status: RunResult["status"] = "blocked";
@@ -122,30 +167,29 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   let steps = 0;
 
   await mkdir(options.out, { recursive: true });
+  const writeJson = async (name: string, value: unknown) => {
+    const path = join(options.out, name);
+    await writeFile(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
+    await rename(`${path}.tmp`, path);
+  };
   const write = async (state: RunStatus, step: Step | null = null) => {
     if (step !== null) await appendFile(join(options.out, "inferred.jsonl"), `${JSON.stringify(step)}\n`);
-    const path = join(options.out, "status.json");
-    await writeFile(
-      `${path}.tmp`,
-      `${JSON.stringify(
-        {
-          status: state,
-          goal: options.goal,
-          url: observation?.url ?? null,
-          steps,
-          actions: history.length,
-          out: options.out,
-          record: options.record ?? null,
-          model: options.model,
-          reason,
-          startedAt,
-          updatedAt: new Date().toISOString(),
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    await rename(`${path}.tmp`, path);
+    if (policy !== null) await writeJson("findings.json", summarize(findings));
+    await writeJson("status.json", {
+      status: state,
+      goal: options.goal,
+      policy: options.policy ?? null,
+      url: observation?.url ?? null,
+      steps,
+      actions: history.length,
+      findings: findings.length,
+      out: options.out,
+      record: options.record ?? null,
+      model: options.model,
+      reason,
+      startedAt,
+      updatedAt: new Date().toISOString(),
+    });
   };
   await write("running");
 
@@ -162,11 +206,40 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       recording = true;
     }
 
+    /**
+     * The policy over the page the run is about to act on: judge it, apply the rules, keep what is new.
+     * A page condition outlives the act that revealed it, so the same title on a later step is that finding
+     * seen again rather than a second one.
+     */
+    const inspect = async (rules: Policy, page: Observation, previous: Previous | undefined, step: number) => {
+      const gathered: Gathered = {
+        previous,
+        content: rules.collect.includes("content") ? await readContent(deps.browser) : undefined,
+      };
+      const inferences = await judge(rules, page, gathered, deps.policyJev);
+      const applied = applyPolicy(rules, page, { ...gathered, inferences });
+      const judged = await judgeFindings(rules, page, gathered, applied, deps.policyJev);
+      const answered = [...inferences, ...judged.inferences];
+      if (answered.length > 0) {
+        await appendFile(
+          join(options.out, "inferred.jsonl"),
+          `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`,
+        );
+      }
+      for (const finding of judged.findings) {
+        const candidate = findingAt(finding, page.url, step);
+        const reported = findings.find((earlier) => earlier.title === candidate.title);
+        if (reported === undefined) findings.push(candidate);
+        else reported.repeats.push({ step: candidate.step, where: candidate.where });
+      }
+    };
+
+    let previous: Previous | undefined;
     while (steps < options.maxSteps) {
       observation = await observe(browser);
-      const previous = history.at(-1);
-      if (previous !== undefined && previous.pageChanged === null) {
-        previous.pageChanged = observation.hash !== previous.hash;
+      const last = history.at(-1);
+      if (last !== undefined && last.pageChanged === null) {
+        last.pageChanged = observation.hash !== last.hash;
       }
       if (stuck(history)) {
         reason = `${STUCK} actions in a row left the page unchanged`;
@@ -176,6 +249,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         join(options.out, "observed.jsonl"),
         `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
       );
+      if (policy !== null) await inspect(policy, observation, previous, steps + 1);
+      previous = undefined;
 
       const decision = await decide({
         jev,
@@ -244,6 +319,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         break;
       }
       step.executed = true;
+      previous = actedOn(decision, observation.hash);
       history.push(step);
       await write("running", step);
     }
@@ -259,6 +335,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       url: observation.url,
       steps,
       actions: history.length,
+      findings: findings.length,
       snapshot: observation.text,
       out: options.out,
       record: options.record ?? null,
