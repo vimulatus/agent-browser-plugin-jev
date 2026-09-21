@@ -17,6 +17,8 @@ function options(goal, overrides = {}) {
     allow: new Set(),
     model: "jev-latest",
     human: false,
+    handoff: true,
+    loginTimeoutMs: 40,
     ...overrides,
   };
 }
@@ -219,8 +221,8 @@ test("a field with no value in the goal blocks the run and types nothing", async
   assert.deepEqual(acts(browser), []);
 });
 
-test("a value span under the threshold blocks the run", async (t) => {
-  const { result, browser, out } = await drive("weak-value");
+test("a value span under the threshold blocks the run with --no-handoff", async (t) => {
+  const { result, browser, out } = await drive("weak-value", null, { handoff: false });
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "blocked");
@@ -306,4 +308,182 @@ test("a goal run carries durationMs, and jev.status reads back the number the ru
   assert.ok(result.durationMs >= written, "the result is measured after the last status write");
   assert.equal(runStatus({ out }).durationMs, written);
   assert.equal(runStatus({ out }).durationMs, written, "a run that has ended reports the same duration every time");
+});
+
+const LOGIN = "http://127.0.0.1:8765/login.html";
+const SETTINGS = "http://127.0.0.1:8765/settings.html";
+const HEADED = `open ${LOGIN} --restore jev-test --headed`;
+
+/** The person signs in on the window: each poll after the headed open serves the next page in `byPoll`, then the last one stays. */
+function signsIn(byPoll) {
+  let poll = null;
+  return (args, state) => {
+    if (args[0] === "open" && args.includes("--headed")) {
+      poll = 0;
+      return state.index;
+    }
+    if (poll !== null && poll < byPoll.length && args.join(" ") === "snapshot -i") return byPoll[poll++];
+    return state.index;
+  };
+}
+
+function polls(browser) {
+  const { calls } = browser.state;
+  return calls.slice(calls.indexOf(HEADED) + 1, calls.lastIndexOf("close"));
+}
+
+test("a login page the goal cannot fill is handed to a window, and the run goes on signed in", async (t) => {
+  const { result, browser, jev, out } = await drive("handoff", null, {}, signsIn([0, 3]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(result.url, SETTINGS);
+  assert.deepEqual(acts(browser), [
+    "auth list",
+    "close",
+    HEADED,
+    "wait --load networkidle",
+    "close",
+    `open ${SETTINGS} --restore jev-test`,
+    "wait --load networkidle",
+  ]);
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i"]);
+  const [login, done] = steps(out);
+  assert.equal(login.operation, "BLOCKED");
+  assert.equal(login.executed, true);
+  assert.equal(login.value, "•••");
+  assert.equal(login.reason, "signed in by hand in a window");
+  assert.equal(jev.requests[1].state.recent_actions[0].pageChanged, true, "Jev is told the login moved the page");
+  assert.equal(done.operation, "DONE");
+  assert.equal(result.actions, 1);
+  assert.deepEqual(result.recordings, []);
+  assert.equal(status(out).status, "done");
+});
+
+test("status.json reads login with the page while the window is open, and jev.status reports it", async (t) => {
+  const run_options = options("open the settings page");
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages("login"), signsIn([0, 3]));
+  const served = browser.run.bind(browser);
+  const seen = [];
+  browser.run = async (args) => {
+    if (args.join(" ") === "snapshot -i" && browser.state.calls.includes(HEADED) && seen.length === 0) {
+      seen.push(runStatus({ out: run_options.out }));
+    }
+    return served(args);
+  };
+
+  await run(run_options, { browser, jev: replayingJev(replay("handoff")), policyJev: unaskedJev() });
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].status, "login");
+  assert.equal(seen[0].url, LOGIN);
+  assert.equal(status(run_options.out).status, "done");
+});
+
+test("a saved auth profile for the page signs in without a window, and the step is logged masked", async (t) => {
+  const advance = (args, state) => (args.join(" ") === "auth login acme" ? 3 : state.index);
+  const run_options = options("open the settings page");
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages("login"), advance);
+  const served = browser.run.bind(browser);
+  browser.run = async (args) => {
+    const data = await served(args);
+    if (args.join(" ") === "auth list") {
+      return {
+        profiles: [
+          { name: "other", url: "http://127.0.0.1:9999/login.html", username: "bob" },
+          { name: "acme", url: `${LOGIN}?next=%2Fsettings.html`, username: "alice@example.com" },
+        ],
+      };
+    }
+    return data;
+  };
+
+  const result = await run(run_options, { browser, jev: replayingJev(replay("handoff")), policyJev: unaskedJev() });
+  assert.equal(result.status, "done");
+  assert.deepEqual(acts(browser), ["auth list", "auth login acme"]);
+  const [login] = steps(run_options.out);
+  assert.equal(login.executed, true);
+  assert.equal(login.value, "•••");
+  assert.equal(login.reason, "signed in with the auth profile acme");
+});
+
+test("a password field the goal has no value for takes the same road as a blocked login page", async (t) => {
+  const { result, browser, out } = await drive("handoff-password", null, {}, signsIn([3]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(acts(browser)[0], "auth list");
+  const [login] = steps(out);
+  assert.equal(login.operation, "TYPE_TEXT");
+  assert.equal(login.label, "Password");
+  assert.equal(login.value, "•••");
+  assert.equal(login.executed, true);
+});
+
+test("an SSO page on the way is not taken for the app: the run waits until the person is back on an origin it knows", async (t) => {
+  const { result, browser, out } = await drive("handoff-sso", null, {}, signsIn([1, 2]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i"]);
+  assert.ok(acts(browser).includes(`open ${SETTINGS} --restore jev-test`));
+  assert.ok(!acts(browser).some((call) => call.includes("accounts.example-sso.test")));
+});
+
+test("a login nobody completes times out, closes the window and ends the run blocked", async (t) => {
+  const { result, browser, out } = await drive("handoff", null, { loginTimeoutMs: 0 }, signsIn([]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, `the login on ${LOGIN} timed out after 0 s in the window`);
+  assert.deepEqual(acts(browser), ["auth list", "close", HEADED, "wait --load networkidle", "close"]);
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i"]);
+  const [login] = steps(out);
+  assert.equal(login.executed, false);
+  assert.match(login.reason, /timed out/);
+  assert.equal(status(out).status, "blocked");
+  assert.equal(status(out).reason, result.reason);
+});
+
+test("a recorded run stops the recording for the window and records the rest to a second file", async (t) => {
+  const record = "/tmp/jev-record/handoff.webm";
+  const { result, browser, out } = await drive("handoff", null, { record }, signsIn([0, 3]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const second = "/tmp/jev-record/handoff-2.webm";
+  assert.deepEqual(acts(browser), [
+    `record start ${record} --cursor`,
+    "auth list",
+    "record stop",
+    "close",
+    HEADED,
+    "wait --load networkidle",
+    "close",
+    `open ${SETTINGS} --restore jev-test`,
+    "wait --load networkidle",
+    `record start ${second} --cursor`,
+    "record stop",
+  ]);
+  assert.equal(result.record, record);
+  assert.deepEqual(result.recordings, [record, second]);
+  assert.deepEqual(status(out).recordings, [record, second]);
+});
+
+test("--no-handoff keeps a blocked login page blocked, and touches neither the vault nor the browser", async (t) => {
+  const { result, browser, out } = await drive("handoff", null, { handoff: false });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "no supported operation can make progress");
+  assert.deepEqual(acts(browser), []);
+});
+
+test("a field with no value on a page with no password field is still blocked, not handed off", async (t) => {
+  const { result, browser, out } = await drive("no-value");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.match(result.reason, /holds no value for Search/);
+  assert.deepEqual(acts(browser), []);
 });

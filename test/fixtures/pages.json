@@ -31,13 +31,23 @@
       "url": "http://127.0.0.1:8765/login.html",
       "title": "Sign in",
       "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]",
-      "console": [{ "type": "error", "text": "Uncaught TypeError: cannot read properties of null" }]
+      "console": [
+        {
+          "type": "error",
+          "text": "Uncaught TypeError: cannot read properties of null"
+        }
+      ]
     },
     {
       "url": "http://127.0.0.1:8765/login.html",
       "title": "Sign in",
       "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]: alice@example.com\n- textbox \"Password\" [ref=e6]: ••••••\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]",
-      "console": [{ "type": "error", "text": "Uncaught TypeError: cannot read properties of null" }]
+      "console": [
+        {
+          "type": "error",
+          "text": "Uncaught TypeError: cannot read properties of null"
+        }
+      ]
     },
     {
       "url": "http://127.0.0.1:8765/settings.html",
@@ -76,6 +86,23 @@
       "url": "http://127.0.0.1:8765/search.html",
       "title": "Search",
       "snapshot": "- heading \"Search\" [level=1, ref=e1]\n- searchbox \"Search\" [ref=e8]\n- button \"Go\" [ref=e4]"
+    }
+  ],
+  "login-sso": [
+    {
+      "url": "http://127.0.0.1:8765/login.html",
+      "title": "Sign in",
+      "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e5]\n- textbox \"Password\" [ref=e6]\n- button \"Sign in\" [ref=e4]\n- link \"Help\" [ref=e2]"
+    },
+    {
+      "url": "https://accounts.example-sso.test/choose?continue=http%3A%2F%2F127.0.0.1%3A8765%2Fsettings.html",
+      "title": "Choose an account",
+      "snapshot": "- heading \"Choose an account\" [level=1, ref=e1]\n- button \"alice@example.com\" [ref=e2]\n- link \"Use another account\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/settings.html",
+      "title": "Settings",
+      "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
     }
   ]
 }

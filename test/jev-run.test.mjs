@@ -77,6 +77,8 @@ test("the request becomes the worker's run flags", async (t) => {
     allow: ["delete"],
     record: "/tmp/jev-record/plugin.webm",
     human: true,
+    handoff: false,
+    loginTimeout: 30,
     wait: true,
   }));
 
@@ -96,6 +98,9 @@ test("the request becomes the worker's run flags", async (t) => {
     "--record",
     "/tmp/jev-record/plugin.webm",
     "--human",
+    "--no-handoff",
+    "--login-timeout",
+    "30",
   ]);
 });
 
@@ -134,4 +139,21 @@ test("a worker that dies without a status is reported failed with what it printe
   assert.equal(body.success, true);
   assert.equal(body.status, "failed");
   assert.match(body.reason, /the worker died before the first step/);
+});
+
+test("jev.run with wait answers as soon as the run opens a window for a login, and jev.status follows it to done", async (t) => {
+  const started = Date.now();
+  const body = clean(t, invoke(
+    "jev.run",
+    { goal: "open the settings page", session: "jev-test", wait: 5000 },
+    { STUB_LOGIN_MS: "200", STUB_DELAY_MS: "1500" },
+  ));
+
+  assert.equal(body.status, "login");
+  assert.equal(body.url, "http://127.0.0.1:8765/login.html");
+  assert.ok(Date.now() - started < 1400, "the wait ends on the login, not on the run");
+  for (let attempt = 0; attempt < 100 && invoke("jev.status", { runId: body.runId }).status !== "done"; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.equal(invoke("jev.status", { runId: body.runId }).status, "done");
 });
