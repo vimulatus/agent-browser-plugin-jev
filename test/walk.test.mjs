@@ -211,6 +211,7 @@ test("a finding is replayed on its own session, with a shot per action and the c
     "errors --clear",
     "network requests --clear",
     "tab new about:blank",
+    `state load ${join(out, "state.json")}`,
     `record start ${evidence("1.webm")} --cursor`,
     `open ${SIGNUP}`,
     "wait --load networkidle",
@@ -277,6 +278,7 @@ test("a control the replay no longer finds on the page makes the finding a one-o
     "errors --clear",
     "network requests --clear",
     "tab new about:blank",
+    `state load ${join(out, "state.json")}`,
     `record start ${join(out, "evidence", "1.webm")} --cursor`,
     `open ${SIGNUP}`,
     "wait --load networkidle",
@@ -306,6 +308,7 @@ test("a finding from a request the page makes on load is replayed once the fresh
     "errors --clear",
     "network requests --clear",
     "tab new about:blank",
+    `state load ${join(out, "state.json")}`,
     `record start ${join(out, "evidence", "1.webm")} --cursor`,
     `open ${orders}`,
     "wait --load networkidle",
@@ -324,6 +327,7 @@ test("every control is tried once across pages, and the frontier sends the walk 
 
   assert.deepEqual(acts(browser), [
     "open http://127.0.0.1:8765/index.html",
+    `state save ${join(out, "state.json")}`,
     "click @e2",
     "click @e2",
     "open http://127.0.0.1:8765/index.html",

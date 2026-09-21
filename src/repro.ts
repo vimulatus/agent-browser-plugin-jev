@@ -35,8 +35,10 @@ export interface Reproduction {
 
 export interface ReproInput {
   browser: AgentBrowser;
+  /** The walk's saved cookies and storage, loaded into the replay before it opens the start page. */
+  state: string;
   out: string;
-  /** The page the walk started on. The replay begins there, on a tab with none of the walk's state. */
+  /** The page the walk started on. The replay begins there, on a tab of its own. */
   home: string;
   /** Names the evidence: `<out>/evidence/<number>.webm` and one `<number>-<step>.png` per action. */
   number: number;
@@ -80,6 +82,7 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
   await browser.run(["network", "requests", "--clear"]);
   // agent-browser 0.38.1 logs no request for the navigation `tab new <url>` makes, so the tab opens blank.
   await browser.run(["tab", "new", "about:blank"]);
+  await browser.run(["state", "load", input.state]);
   await browser.run(["record", "start", recording, "--cursor"]);
   try {
     await browser.run(["open", input.home]);
