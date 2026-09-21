@@ -73,7 +73,7 @@ agent-browser-plugin-jev run "log in as alice@example.com with password secret a
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock.
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -87,10 +87,23 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, reaso
 | `--fixtures` | `<file>` | The values a walk types into forms; replaces a built-in key or adds one |
 | `--record` | `<file>` | Records the run to this `.webm` or `.mp4`, cursor included |
 | `--human` | | Moves the pointer along a curve instead of jumping to each target |
+| `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
+| `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
 
 A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count and add `findingsFile`, the absolute path of that file. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
+
+### Signing in
+
+A run that cannot act on a page with a password field, because the goal holds no value for it or Jev sees no move, signs in instead of stopping. It tries two things, in this order:
+
+1. **The agent-browser auth vault.** `agent-browser auth list` names the saved profiles and their URLs. A profile saved on the page's origin and path, query aside, is used through `agent-browser auth login <name>`: agent-browser types the credentials, so Jev still writes no text. The step is logged with its value masked. Save one with `agent-browser auth save <name> --url <login url> --username <user> --password-stdin`.
+2. **A window for the person.** With no profile for the page, the run closes the headless browser and reopens the same session with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and a `jev.run` that is waiting answers with that status at once, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the window closes, the session reopens headless where they landed, with their cookies and storage restored, and the run goes on from the next step.
+
+`--login-timeout` bounds the wait, 300 seconds by default. When it runs out, the window closes and the run ends `blocked` with a reason that names the login page. `--no-handoff` keeps an unattended run out of both paths: it ends `blocked` at the login page with today's reason. A headed window needs a display: on a Linux host without one, agent-browser starts Xvfb, nobody sees the window, and the timeout ends the run.
+
+agent-browser 0.38.1 has no live switch between headed and headless, so each leg is a relaunch, and the cookies and storage cross it through `--restore <session>`: agent-browser saves them on close under `~/.agent-browser/sessions/<session>-<session>.json`, as plain JSON unless `AGENT_BROWSER_ENCRYPTION_KEY` is set. A recorded run stops the recording before the window and starts it again after, on a second file (`login.webm`, then `login-2.webm`); `recordings` in the result and in `status.json` names every file. A page that shows its login form and its app on the same URL is not detected as signed in, and the wait runs out.
 
 ### Recording
 
@@ -143,7 +156,7 @@ Jev picks the key per field, with a `NONE` option for a field no value fits. Not
 
 A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`.
 
-The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. That session starts cold, with none of the walk's cookies or storage, so a finding several screens past a login may not reproduce. It is closed when the walk ends, and every act in it is human-paced whether or not the walk is: the recording is evidence someone watches. It needs ffmpeg on PATH.
+The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. Before each replay the walk saves its cookies and storage to `<out>/state.json` with `state save`, and the replay loads them before it opens the start page, so a finding past a login is reached logged in. It is closed when the walk ends, and every act in it is human-paced whether or not the walk is: the recording is evidence someone watches. It needs ffmpeg on PATH.
 
 ## Policy files
 
@@ -242,15 +255,15 @@ agent-browser plugin run jev jev.run --payload '{"goal":"open the settings page"
 agent-browser plugin run jev jev.status --payload '{"runId":"jev-run-2f9c1d40aa"}'
 ```
 
-agent-browser kills a plugin at 60 seconds, so `jev.run` starts the run as a detached worker and answers `{ runId, out, status: "running" }` at once. `wait: true` holds the answer for up to 55 seconds and returns the run's final status when it ends in time; `wait: <milliseconds>` holds it for less. A run longer than that keeps going, and `jev.status` reports it.
+agent-browser kills a plugin at 60 seconds, so `jev.run` starts the run as a detached worker and answers `{ runId, out, status: "running" }` at once. `wait: true` holds the answer for up to 55 seconds and returns the run's final status when it ends in time; `wait: <milliseconds>` holds it for less. A run longer than that keeps going, and `jev.status` reports it. A run that opens a window for a login ends the wait too, with `status: "login"` and the page's URL, so the agent can tell the person before the wait is up.
 
 | Request | Takes | Answers |
 |---|---|---|
 | `plugin.manifest` | nothing | The plugin's name and its capabilities, which is what `plugin add` records |
-| `jev.run` | `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, out, wait }` | `{ runId, out, status }` |
+| `jev.run` | `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, handoff, loginTimeout, out, wait }` | `{ runId, out, status }` |
 | `jev.status` | `{ runId }` or `{ out }` | The run's `status.json` |
 
-`status` is `running`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed`, with the last line of `<out>/worker.log` as the reason.
+`handoff: false` is `--no-handoff` and `loginTimeout` is `--login-timeout`, in seconds. `status` is `running`, `login`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed`, with the last line of `<out>/worker.log` as the reason.
 
 The session comes from the payload, else from `AGENT_BROWSER_SESSION` in the environment agent-browser passes down. Anything that goes wrong answers `{ success: false, error }`, and nothing but JSON reaches stdout.
 
@@ -260,7 +273,8 @@ Everything lands in `--out`, a fresh directory under the temp dir when you name 
 
 | File | What is in it |
 |---|---|
-| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
+| `status.json` | `{ status, goal, url, steps, actions, out, record, recordings, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
+| `state.json` | The walk's cookies and storage, saved before each replay for the `-repro` session to load |
 | `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
 | `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |
 | `findings.json` | What a walk found, below |
@@ -308,6 +322,7 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 | A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
 | A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
 | A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. `--input-mode human`, `record start --cursor` and `click --human` were checked against agent-browser 0.38.1 without Jev, and gave a playable VP8 `.webm` with a cursor that eases between targets |
+| A login handed to a window | `run "open the settings page" --url <a login page>`, then sign in on the window | No. The legs were checked against agent-browser 0.38.1 without Jev: `close`, `open <url> --restore <session> --headed`, `close`, `open <url> --restore <session>` came back with `restoreStatus: "loaded"` and the cookie set in the window, `state save` and `state load` carried a cookie and a localStorage key to a second session, and the first read after a relaunch threw `SecurityError` until a `wait --load` ran first. The poll that decides the person is signed in has not run against a real login page |
 
 The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
 
