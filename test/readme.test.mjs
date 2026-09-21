@@ -40,6 +40,11 @@ test("the README names every policy that ships", () => {
   for (const policy of policies) assert.ok(documents(readme, policy), `README does not name ${policy}.yaml`);
 });
 
+test("the docs name the duration every result carries", () => {
+  assert.ok(documents(readme, "durationMs"), "README does not name durationMs");
+  assert.ok(documents(skill, "durationMs"), "SKILL.md does not name durationMs");
+});
+
 test("SKILL.md has the frontmatter npx skills add reads", () => {
   const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(skill);
   assert.ok(frontmatter, "SKILL.md starts with no YAML frontmatter");

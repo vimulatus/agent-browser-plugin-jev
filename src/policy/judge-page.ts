@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentBrowser } from "../agent-browser.js";
 import { observe } from "../observe.js";
+import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
 import { readContent } from "./content.js";
 import { recordHar } from "./har.js";
@@ -21,10 +22,12 @@ export interface JudgePageOptions {
 export interface Judged {
   findings: Finding[];
   inferred?: string;
+  durationMs: number;
 }
 
 /** `run --policy <file> --max-steps 0`: observe the current page once and apply the policy. */
 export async function judgePage({ session, policyPath, out, jev = typesafeJev() }: JudgePageOptions): Promise<Judged> {
+  const elapsed = stopwatch();
   const policy = loadPolicy(policyPath);
   const browser = agentBrowser(session);
   const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
@@ -35,8 +38,9 @@ export async function judgePage({ session, policyPath, out, jev = typesafeJev() 
   const applied = applyPolicy(policy, observation, { ...gathered, inferences });
   const judged = await judgeFindings(policy, observation, gathered, applied, jev);
   const answered = [...inferences, ...judged.inferences];
-  if (answered.length === 0) return { findings: judged.findings };
-  return { findings: judged.findings, inferred: writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), "jev-"))) };
+  if (answered.length === 0) return { findings: judged.findings, durationMs: elapsed() };
+  const inferred = writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), "jev-")));
+  return { findings: judged.findings, inferred, durationMs: elapsed() };
 }
 
 /** The options when argv is `run --policy <file> --max-steps 0 [--session <name>] [--out <dir>]`, else null. */

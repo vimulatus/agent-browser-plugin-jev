@@ -21,6 +21,7 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { valueSpans } from "./spans.js";
+import { stopwatch } from "./stopwatch.js";
 
 export const DEFAULT_MAX_STEPS = 60;
 /** This many acts in a row that leave the page unchanged mean the run cannot progress. */
@@ -55,6 +56,7 @@ export interface RunResult {
   out: string;
   record: string | null;
   reason: string | null;
+  durationMs: number;
 }
 
 /** What the loop drives. Tests inject a scripted browser and recorded Jev replies. */
@@ -156,6 +158,7 @@ function recent(history: Step[]): Recent[] {
  * With `--policy` every page the run sees is judged against it before the decision, into `findings.json`.
  */
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
+  const elapsed = stopwatch();
   const policy = policyOf(options);
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
@@ -189,6 +192,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       reason,
       startedAt,
       updatedAt: new Date().toISOString(),
+      durationMs: elapsed(),
     });
   };
   await write("running");
@@ -340,6 +344,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       out: options.out,
       record: options.record ?? null,
       reason,
+      durationMs: elapsed(),
     };
   } catch (error) {
     reason = (error as Error).message;

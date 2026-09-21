@@ -73,6 +73,24 @@ test("a policy with no judge section writes no inferred.jsonl", async () => {
   );
 });
 
+test("judging one page carries durationMs, with a judge section and without one", async () => {
+  const judged = await judgePage({
+    session: "perf",
+    policyPath: "perf",
+    out: mkdtempSync(join(tmpdir(), "jev-perf-")),
+    jev: { ask: async () => RECORDED.answers },
+  });
+  const unasked = await judgePage({
+    session: "perf",
+    policyPath: fileURLToPath(new URL("./fixtures/perf-latency-only.yaml", import.meta.url)),
+    jev: { ask: async () => assert.fail("a policy with no judge section must not ask Jev anything") },
+  });
+
+  for (const { durationMs } of [judged, unasked]) {
+    assert.ok(Number.isInteger(durationMs) && durationMs >= 0, `the judged page holds durationMs ${durationMs}`);
+  }
+});
+
 test("--out names a directory the run creates, so a path that does not exist yet still gets the answers", async () => {
   const out = join(mkdtempSync(join(tmpdir(), "jev-out-")), "run-1", "answers");
   const judged = await judgePage({

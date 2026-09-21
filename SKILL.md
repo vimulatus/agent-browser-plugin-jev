@@ -103,9 +103,10 @@ report:
 
 Everything lands in `--out`, named in the result and in `status.json`.
 
-- A goal run prints `{ status, url, steps, actions, snapshot, out, record, reason }` and exits 0 when done, 2 when blocked.
-- `--max-steps 0` prints `{ findings, inferred }`.
-- A walk prints `{ status, url, steps, actions, findings, out, record, reason }` and writes `findings.json`.
+- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, reason, durationMs }` and exits 0 when done, 2 when blocked.
+- `--max-steps 0` prints `{ findings, inferred, durationMs }`.
+- A walk prints `{ status, url, steps, actions, findings, out, record, reason, durationMs }` and writes `findings.json`.
+- `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so `jev.status` says how long a run has been going.
 
 `findings.json` is `{ findings, summary }`. Read `summary` first: `{ title, severity, where }` per finding. Each entry of `findings` adds `step`, `evidence`, `repeats` (the later steps that saw the same thing), and, when the walk replayed it, `reproduced`, `repro` (each action with the screenshot of the page it produced), `recording`, `console` and `errors`. Write your report from those fields. The plugin writes titles from templates and no prose.
 

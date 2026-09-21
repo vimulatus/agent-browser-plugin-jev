@@ -24,7 +24,7 @@ import {
 import { reproduce } from "./repro.js";
 import { MASK, type RunOptions, type RunStatus } from "./run.js";
 import type { Operation } from "./snapshot.js";
-
+import { stopwatch } from "./stopwatch.js";
 /** A walk is a run with a policy and no goal. */
 export type WalkOptions = RunOptions & { policy: string };
 
@@ -58,6 +58,7 @@ export interface WalkResult {
   out: string;
   record: string | null;
   reason: string;
+  durationMs: number;
 }
 
 /** What the walk drives: the browser, the session it replays findings on, and Jev for its own and the policy's questions. */
@@ -109,6 +110,7 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
  * origin it started on, and stops when the frontier or `--max-steps` runs out.
  */
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
+  const elapsed = stopwatch();
   const policy = loadPolicy(options.policy);
   if (policy.collect.includes("har")) {
     throw new Error(
@@ -151,6 +153,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       reason,
       startedAt,
       updatedAt: new Date().toISOString(),
+      durationMs: elapsed(),
     });
   };
   await save("running");
@@ -351,6 +354,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       out: options.out,
       record: options.record ?? null,
       reason,
+      durationMs: elapsed(),
     };
   } catch (error) {
     reason = (error as Error).message;

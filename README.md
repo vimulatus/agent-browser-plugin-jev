@@ -73,7 +73,7 @@ agent-browser-plugin-jev run "log in as alice@example.com with password secret a
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, snapshot, out, record, reason }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked.
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -110,7 +110,7 @@ agent-browser --session jev-check open http://127.0.0.1:8765/orders.html
 agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-check
 ```
 
-It prints `{ findings, inferred }`: the findings the rules raised, and the path of the file holding every answer Jev gave. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
+It prints `{ findings, inferred, durationMs }`: the findings the rules raised, the path of the file holding every answer Jev gave, and how long the command took. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
 
 ## Walk an app
 
@@ -119,6 +119,8 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 ```bash
 agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
+
+It prints `{ status, url, steps, actions, findings, out, record, reason, durationMs }` as JSON.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
@@ -258,7 +260,7 @@ Everything lands in `--out`, a fresh directory under the temp dir when you name 
 
 | File | What is in it |
 |---|---|
-| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt }`, rewritten at every step. A walk sets `goal` to null and adds `policy`, `findings` and `unfilled` |
+| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings` and `unfilled` |
 | `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
 | `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |
 | `findings.json` | What a walk found, below |
