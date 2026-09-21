@@ -273,7 +273,7 @@ Everything lands in `--out`, a fresh directory under the temp dir when you name 
 
 | File | What is in it |
 |---|---|
-| `status.json` | `{ status, goal, url, steps, actions, out, record, recordings, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
+| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A goal run adds `recordings`. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
 | `state.json` | The walk's cookies and storage, saved before each replay for the `-repro` session to load |
 | `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
 | `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |

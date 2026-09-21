@@ -80,8 +80,8 @@ export async function handoff(input: Handoff): Promise<string | null> {
   const { browser, session, url } = input;
   await browser.run(["close"]);
   await browser.run(["open", url, "--restore", session, "--headed"]);
-  await settle(browser);
   await input.opened();
+  await settle(browser);
   const landed = await landing(input);
   await browser.run(["close"]);
   if (landed === null) return null;

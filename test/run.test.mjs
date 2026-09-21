@@ -18,7 +18,7 @@ function options(goal, overrides = {}) {
     model: "jev-latest",
     human: false,
     handoff: true,
-    loginTimeoutMs: 40,
+    loginTimeoutMs: 200,
     ...overrides,
   };
 }
