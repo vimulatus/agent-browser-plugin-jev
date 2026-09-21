@@ -45,6 +45,11 @@ test("the docs name the duration every result carries", () => {
   assert.ok(documents(skill, "durationMs"), "SKILL.md does not name durationMs");
 });
 
+test("the docs name the file a result that wrote findings points at", () => {
+  assert.ok(documents(readme, "findingsFile"), "README does not name findingsFile");
+  assert.ok(documents(skill, "findingsFile"), "SKILL.md does not name findingsFile");
+});
+
 test("SKILL.md has the frontmatter npx skills add reads", () => {
   const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(skill);
   assert.ok(frontmatter, "SKILL.md starts with no YAML frontmatter");

@@ -1,7 +1,7 @@
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { commandFor } from "./act.js";
 import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
@@ -52,6 +52,8 @@ export interface RunResult {
   steps: number;
   actions: number;
   findings: number;
+  /** The absolute path of `findings.json`, on a run with `--policy`; absent when no file was written. */
+  findingsFile?: string;
   snapshot: string;
   out: string;
   record: string | null;
@@ -160,6 +162,7 @@ function recent(history: Step[]): Recent[] {
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
   const elapsed = stopwatch();
   const policy = policyOf(options);
+  const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
   const findings: WalkFinding[] = [];
@@ -186,6 +189,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       steps,
       actions: history.length,
       findings: findings.length,
+      findingsFile,
       out: options.out,
       record: options.record ?? null,
       model: options.model,
@@ -340,6 +344,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       steps,
       actions: history.length,
       findings: findings.length,
+      findingsFile,
       snapshot: observation.text,
       out: options.out,
       record: options.record ?? null,

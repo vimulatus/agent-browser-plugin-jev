@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { defaultOut, run } from "../dist/run.js";
 import { runStatus } from "../dist/worker.js";
 import { lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
@@ -85,6 +85,8 @@ test("a goal run without a policy judges nothing and writes no findings", async 
   assert.equal(result.findings, 0);
   assert.equal(status(out).policy, null);
   assert.equal(existsSync(join(out, "findings.json")), false);
+  assert.equal(result.findingsFile, undefined, "a run that wrote no findings.json names none");
+  assert.equal("findingsFile" in status(out), false);
 });
 
 test("a goal run with --policy raises the console error the login page logs", async (t) => {
@@ -111,6 +113,17 @@ test("a goal run with --policy raises the console error the login page logs", as
   assert.equal(status(out).findings, 1);
   assert.equal(status(out).policy, "errors");
   assert.deepEqual(policyJev.calls, [], "a policy with no judge section asks Jev nothing");
+});
+
+test("a goal run with --policy names findings.json, and jev.status reads the same path back", async (t) => {
+  const { result, out } = await drive("login-policy", null, { policy: "errors" });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const file = join(out, "findings.json");
+  assert.equal(result.findingsFile, file);
+  assert.ok(isAbsolute(result.findingsFile), result.findingsFile);
+  assert.equal(status(out).findingsFile, file);
+  assert.equal(runStatus({ out }).findingsFile, file);
 });
 
 test("a policy that collects a HAR is refused: a goal run cannot reload the page under itself", async (t) => {

@@ -90,7 +90,7 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, reaso
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
 
-A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
+A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count and add `findingsFile`, the absolute path of that file. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
 
 ### Recording
 
@@ -120,7 +120,7 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-It prints `{ status, url, steps, actions, findings, out, record, reason, durationMs }` as JSON.
+It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
@@ -260,7 +260,7 @@ Everything lands in `--out`, a fresh directory under the temp dir when you name 
 
 | File | What is in it |
 |---|---|
-| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings` and `unfilled` |
+| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
 | `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
 | `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |
 | `findings.json` | What a walk found, below |
