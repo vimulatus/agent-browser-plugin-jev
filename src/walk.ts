@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { commandFor } from "./act.js";
 import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
 import { chooseNext, type Chosen } from "./choose.js";
@@ -55,6 +55,8 @@ export interface WalkResult {
   steps: number;
   actions: number;
   findings: number;
+  /** The absolute path of `findings.json`, which a walk always writes. */
+  findingsFile: string;
   out: string;
   record: string | null;
   reason: string;
@@ -118,6 +120,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     );
   }
   const fixtures = loadFixtures(options.fixtures);
+  const findingsFile = resolve(options.out, "findings.json");
   const seen = frontier();
   const findings: WalkFinding[] = [];
   const unfilled: { label: string; url: string }[] = [];
@@ -146,6 +149,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       steps,
       actions,
       findings: findings.length,
+      findingsFile,
       unfilled: unfilled.length,
       out: options.out,
       record: options.record ?? null,
@@ -351,6 +355,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       steps,
       actions,
       findings: findings.length,
+      findingsFile,
       out: options.out,
       record: options.record ?? null,
       reason,

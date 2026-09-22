@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { defaultOut } from "../dist/run.js";
 import { actionsBefore, walk } from "../dist/walk.js";
 import { lines, replayingJev } from "./helpers.mjs";
@@ -247,6 +247,9 @@ test("a finding is replayed on its own session, with a shot per action and the c
   assert.deepEqual(finding.errors, []);
   assert.deepEqual(summary, [{ title: finding.title, severity: "medium", where: WELCOME }]);
   assert.equal(result.findings, 1);
+  assert.ok(isAbsolute(result.findingsFile) && result.findingsFile.endsWith("/findings.json"), result.findingsFile);
+  assert.equal(result.findingsFile, join(out, "findings.json"));
+  assert.equal(json(out, "status.json").findingsFile, result.findingsFile);
 });
 
 test("a finding the replay cannot raise again is kept, unreproduced", async (t) => {
