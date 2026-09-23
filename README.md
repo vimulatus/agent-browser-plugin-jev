@@ -1,6 +1,8 @@
-# agent-browser-plugin-jev
+# Jev
 
-An [agent-browser](https://github.com/vercel-labs/agent-browser) plugin. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
+A command that drives a browser for an agent. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
+
+Jev drives the browser through the [agent-browser](https://github.com/vercel-labs/agent-browser) binary on PATH.
 
 The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/issues/1).
 
@@ -8,9 +10,12 @@ The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/iss
 
 You need Node 20 or newer, the `agent-browser` binary on PATH, and a TypeSafe API key.
 
-### From any directory
+```bash
+npm install -g agent-browser-plugin-jev
+jev    # prints the usage
+```
 
-Clone, build and link the command, then register it once for the machine:
+From a clone instead:
 
 ```bash
 git clone https://github.com/vimulatus/agent-browser-plugin-jev
@@ -18,44 +23,7 @@ cd agent-browser-plugin-jev
 pnpm install && pnpm build && npm link
 ```
 
-Put this in `~/.agent-browser/config.json`:
-
-```json
-{
-  "plugins": [
-    {
-      "name": "jev",
-      "command": "agent-browser-plugin-jev",
-      "capabilities": ["command.run", "jev.run", "jev.status"]
-    }
-  ]
-}
-```
-
-The plugin answers from any directory once that file is there:
-
-```bash
-agent-browser plugin run jev jev.status --payload '{"runId":"x"}'
-# Plugin 'jev' failed: no run x
-```
-
 After a `git pull`, run `pnpm build` again. The linked command runs `dist/`, and only the build writes it.
-
-### In one project
-
-```bash
-agent-browser plugin add vimulatus/agent-browser-plugin-jev
-```
-
-This writes `./agent-browser.json` in the current directory, so every project registers the plugin again, and it registers the command as `npx -y github:vimulatus/agent-browser-plugin-jev`. In a project whose `package.json` pins a package manager other than npm through `devEngines`, npm refuses to run anything and the plugin never starts:
-
-```
-Plugin 'jev' exited unsuccessfully.
-npm error code EBADDEVENGINES
-npm error EBADDEVENGINES Invalid name "bun" does not match "npm" for "packageManager"
-```
-
-`plugin add --global` writes the same `npx` command into `~/.agent-browser/config.json` and fails the same way. In a bun or yarn project, install from any directory instead.
 
 ### The key
 
@@ -63,13 +31,13 @@ npm error EBADDEVENGINES Invalid name "bun" does not match "npm" for "packageMan
 export TYPESAFE_API_KEY=...
 ```
 
-Export it in the shell that runs `agent-browser`: the plugin reads the environment it inherits. A policy with no `judge` section asks Jev nothing and needs no key.
+Export it in the shell that runs `jev`. A policy with no `judge` section asks Jev nothing and needs no key.
 
 ## Run a goal
 
 ```bash
 export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix jev)"
-agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
+jev run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
@@ -99,7 +67,7 @@ A goal run with `--policy` judges every page it reaches, before each decision, a
 A run that cannot act on a page with a password field, because the goal holds no value for it or Jev sees no move, signs in instead of stopping. It tries two things, in this order:
 
 1. **The agent-browser auth vault.** `agent-browser auth list` names the saved profiles and their URLs. A profile saved on the page's origin and path, query aside, is used through `agent-browser auth login <name>`: agent-browser types the credentials, so Jev still writes no text. The step is logged with its value masked. Save one with `agent-browser auth save <name> --url <login url> --username <user> --password-stdin`.
-2. **A window for the person.** With no profile for the page, the run closes the headless browser and reopens the same session with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and a `jev.run` that is waiting answers with that status at once, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the window closes, the session reopens headless where they landed, with their cookies and storage restored, and the run goes on from the next step.
+2. **A window for the person.** With no profile for the page, the run closes the headless browser and reopens the same session with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and stderr says `jev: sign in on the window at <url>`, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the window closes, the session reopens headless where they landed, with their cookies and storage restored, and the run goes on from the next step.
 
 `--login-timeout` bounds the wait, 300 seconds by default. When it runs out, the window closes and the run ends `blocked` with a reason that names the login page. `--no-handoff` keeps an unattended run out of both paths: it ends `blocked` at the login page with today's reason. A headed window needs a display: on a Linux host without one, agent-browser starts Xvfb, nobody sees the window, and the timeout ends the run.
 
@@ -108,7 +76,7 @@ agent-browser 0.38.1 has no live switch between headed and headless, so each leg
 ### Recording
 
 ```bash
-agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
+jev run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html --record ./login.webm --human
 ```
 
@@ -120,7 +88,7 @@ agent-browser-plugin-jev run "log in as alice@example.com with password secret a
 
 ```bash
 agent-browser --session jev-check open http://127.0.0.1:8765/orders.html
-agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-check
+jev run --policy perf --max-steps 0 --session jev-check
 ```
 
 It prints `{ findings, inferred, durationMs }`: the findings the rules raised, the path of the file holding every answer Jev gave, and how long the command took. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
@@ -130,7 +98,7 @@ It prints `{ findings, inferred, durationMs }`: the findings the rules raised, t
 With a policy and no goal, `run` walks the app on its own: it tries every control it finds once, applies the policy after every step, and writes down what it found.
 
 ```bash
-agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
 It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
@@ -160,7 +128,7 @@ The replay runs on a session named `<session>-repro`, so it disturbs nothing the
 
 ## Policy files
 
-A policy is a YAML file with four sections under an optional `name`. `--policy` takes a path, or the name of a policy that ships with the plugin.
+A policy is a YAML file with four sections under an optional `name`. `--policy` takes a path, or the name of a policy that ships with the package.
 
 ### collect
 
@@ -246,26 +214,18 @@ report:
 | `perf` | A request slower than a second that the page needs, told apart from a slow beacon or third party, and a page still showing a spinner. `perf.yaml` |
 | `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
 
-## Through the plugin protocol
+## From an agent
 
-An agent that has agent-browser starts the same run without knowing the CLI:
+An agent runs `jev` like any other command and reads one JSON line from stdout when it ends. A run blocks until it is done, blocked or failed, so an agent that wants to go on meanwhile starts it in the background.
 
-```bash
-agent-browser plugin run jev jev.run --payload '{"goal":"open the settings page","wait":true}'
-agent-browser plugin run jev jev.status --payload '{"runId":"jev-run-2f9c1d40aa"}'
-```
+Two lines go to stderr while the run is in flight:
 
-agent-browser kills a plugin at 60 seconds, so `jev.run` starts the run as a detached worker and answers `{ runId, out, status: "running" }` at once. `wait: true` holds the answer for up to 55 seconds and returns the run's final status when it ends in time; `wait: <milliseconds>` holds it for less. A run longer than that keeps going, and `jev.status` reports it. A run that opens a window for a login ends the wait too, with `status: "login"` and the page's URL, so the agent can tell the person before the wait is up.
+| Line | When |
+|---|---|
+| `jev: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
+| `jev: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
 
-| Request | Takes | Answers |
-|---|---|---|
-| `plugin.manifest` | nothing | The plugin's name and its capabilities, which is what `plugin add` records |
-| `jev.run` | `{ goal, policy, url, session, maxSteps, allow, fixtures, record, human, handoff, loginTimeout, out, wait }` | `{ runId, out, status }` |
-| `jev.status` | `{ runId }` or `{ out }` | The run's `status.json` |
-
-`handoff: false` is `--no-handoff` and `loginTimeout` is `--login-timeout`, in seconds. `status` is `running`, `login`, `done`, `blocked` or `failed`. A worker that died before writing a status is reported `failed`, with the last line of `<out>/worker.log` as the reason.
-
-The session comes from the payload, else from `AGENT_BROWSER_SESSION` in the environment agent-browser passes down. Anything that goes wrong answers `{ success: false, error }`, and nothing but JSON reaches stdout.
+`status` in `status.json` is `running`, `login`, `done`, `blocked` or `failed`.
 
 ## What a run writes
 
@@ -317,7 +277,6 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 | Check | The command | Run for real |
 |---|---|---|
 | A goal run reaches its page | `run "log in as alice@example.com with password secret and open Settings" --url .../login.html` | Yes. Four actions, `status: "done"`, ending on `/settings.html` |
-| The protocol path answers in time | `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` | Yes, against agent-browser 0.38.1. The final status came back in 5.2 s |
 | A policy judges one page | `run --policy bug-hunt --max-steps 0 --session <name>` on a page that fetches a 500 and shows a banner | Yes, with `errors`, `perf` and `bug-hunt` on that page. `bug-hunt` raised two findings, and `inferred.jsonl` shows the probabilities behind them |
 | A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
 | A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
@@ -349,7 +308,7 @@ Both requests are slower than a second, so `latency` buckets both as `bad` and o
 
 ```bash
 agent-browser --session jev-perf open http://127.0.0.1:8791/index.html
-agent-browser-plugin-jev run --policy perf --max-steps 0 --session jev-perf
+jev run --policy perf --max-steps 0 --session jev-perf
 ```
 
 Expect one finding, `GET /api/products took 2501 ms`, and nothing about the beacon. The file at `inferred` says why: `/api/products` is `content_for_this_page`, the beacon is `analytics`.

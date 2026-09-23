@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
 
-/** The test data a walk types into a form. Jev picks the key per field; the plugin never writes a value. */
+/** The test data a walk types into a form. Jev picks the key per field; Jev never writes a value. */
 export const DEFAULT_FIXTURES: Record<string, string> = {
   email: "jev.tester@example.com",
   password: "Test-Passw0rd-42",

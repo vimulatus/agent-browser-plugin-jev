@@ -304,7 +304,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         url: page.url,
         origins,
         timeoutMs: options.loginTimeoutMs,
-        opened: () => write("login"),
+        opened: async () => {
+          // The run blocks its caller, so the caller learns of the window from stderr, not from status.json.
+          process.stderr.write(`jev: sign in on the window at ${page.url}\n`);
+          await write("login");
+        },
       });
       if (landed === null) {
         reason = step.reason = `the login on ${page.url} timed out after ${options.loginTimeoutMs / 1000} s in the window`;

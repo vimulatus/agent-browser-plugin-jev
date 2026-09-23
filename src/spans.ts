@@ -43,7 +43,7 @@ function matches(goal: string, pattern: RegExp): string[] {
 }
 
 /**
- * Every value the goal could put in a field, widest first. Jev picks one; the plugin writes no text,
+ * Every value the goal could put in a field, widest first. Jev picks one and writes no text,
  * so a value that is not in this list cannot be typed.
  */
 export function valueSpans(goal: string): string[] {

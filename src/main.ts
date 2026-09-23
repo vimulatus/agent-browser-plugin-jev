@@ -1,16 +1,8 @@
 #!/usr/bin/env node
 import { parseRunArgs, USAGE, UsageError } from "./args.js";
-import { answer } from "./protocol.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { defaultOut, run } from "./run.js";
 import { walk, type WalkOptions } from "./walk.js";
-
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) return "";
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
-}
 
 async function main(argv: string[]): Promise<number> {
   const judge = judgePageOptions(argv);
@@ -24,6 +16,7 @@ async function main(argv: string[]): Promise<number> {
       throw new UsageError('run needs a goal or a policy: run "<goal>", or run --policy <file>');
     }
     if (options.out === "") options.out = defaultOut();
+    process.stderr.write(`jev: writing to ${options.out}\n`);
     if (options.goal === "") {
       process.stdout.write(`${JSON.stringify(await walk(options as WalkOptions))}\n`);
       return 0;
@@ -33,13 +26,8 @@ async function main(argv: string[]): Promise<number> {
     return result.status === "done" ? 0 : 2;
   }
   if (argv.length > 0) throw new UsageError(`unknown command ${argv[0]}`);
-  const stdin = await readStdin();
-  if (stdin.trim() === "") {
-    process.stderr.write(USAGE);
-    return 1;
-  }
-  process.stdout.write(JSON.stringify(await answer(stdin)));
-  return 0;
+  process.stderr.write(USAGE);
+  return 1;
 }
 
 try {
