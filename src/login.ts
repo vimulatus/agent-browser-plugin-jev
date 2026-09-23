@@ -1,15 +1,10 @@
-import type { AgentBrowser } from "./agent-browser.js";
+import type { Browser } from "./browser.js";
 import type { Observation } from "./observe.js";
 import { parseSnapshot, type Element } from "./snapshot.js";
 
 /** How long a run holds the window open for the person to sign in. */
 export const LOGIN_TIMEOUT_MS = 5 * 60_000;
 const POLL_MS = 1000;
-
-interface Profile {
-  name: string;
-  url: string;
-}
 
 function password(element: Element): boolean {
   return element.password === true;
@@ -28,15 +23,12 @@ function samePage(a: string, b: string): boolean {
 }
 
 /** The saved `auth` profile for this page, or null when none is saved for it. */
-export async function authProfileFor(browser: AgentBrowser, url: string): Promise<string | null> {
-  const { profiles } = (await browser.run(["auth", "list"])) as { profiles?: Profile[] };
-  return (profiles ?? []).find((profile) => samePage(profile.url, url))?.name ?? null;
+export async function authProfileFor(browser: Browser, url: string): Promise<string | null> {
+  return (await browser.authProfiles()).find((profile) => samePage(profile.url, url))?.name ?? null;
 }
 
 export interface Handoff {
-  browser: AgentBrowser;
-  /** The session, which is also the key the browser's cookies and storage are saved under between the relaunches. */
-  session: string;
+  browser: Browser;
   /** The login page the run hands over. */
   url: string;
   /** Every origin the run has been on. The person is signed in once they land on one of them, so an SSO page on the way is not taken for the app. */
@@ -51,17 +43,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** The first read after a relaunch can race the page and throw, so the run lets it load first. A page that never goes quiet times the wait out, and the run goes on. */
-async function settle(browser: AgentBrowser): Promise<void> {
-  await browser.run(["wait", "--load", "networkidle"]).catch(() => undefined);
+async function settle(browser: Browser): Promise<void> {
+  await browser.wait("networkidle").catch(() => undefined);
 }
 
 /** The URL the person landed on: off the login page, on an origin the run knows, with no password field left. Null when the wait ran out. */
 async function landing({ browser, url, origins, timeoutMs }: Handoff): Promise<string | null> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as { origin: string; snapshot: string };
-    const here = snapshot.origin;
-    if (here !== url && origins.has(new URL(here).origin) && !parseSnapshot(snapshot.snapshot).some(password)) return here;
+    const snapshot = await browser.snapshot(true);
+    const here = snapshot.url;
+    if (here !== url && origins.has(new URL(here).origin) && !parseSnapshot(snapshot.tree).some(password)) return here;
     const left = deadline - Date.now();
     if (left <= 0) return null;
     await sleep(Math.min(POLL_MS, left));
@@ -71,21 +63,19 @@ async function landing({ browser, url, origins, timeoutMs }: Handoff): Promise<s
 /**
  * Hands the login to the person: closes the headless browser, reopens the session in a window on the login page,
  * and polls the page until they are signed in. Then the window closes, which saves its cookies and storage under
- * the session, and the session reopens headless where they landed, restored. agent-browser 0.38.1 has no live
- * switch between headed and headless, so each leg is a relaunch, and `--restore` rides only on these two opens:
- * on a browser launched without it, it relaunches the browser and drops what it held.
+ * the session, and the session reopens headless where they landed, restored.
  * Returns where the person landed, or null when the wait ran out and the window was closed.
  */
 export async function handoff(input: Handoff): Promise<string | null> {
-  const { browser, session, url } = input;
-  await browser.run(["close"]);
-  await browser.run(["open", url, "--restore", session, "--headed"]);
+  const { browser, url } = input;
+  await browser.close();
+  await browser.reopen(url, true);
   await input.opened();
   await settle(browser);
   const landed = await landing(input);
-  await browser.run(["close"]);
+  await browser.close();
   if (landed === null) return null;
-  await browser.run(["open", landed, "--restore", session]);
+  await browser.reopen(landed, false);
   await settle(browser);
   return landed;
 }

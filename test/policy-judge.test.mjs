@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
+import { driven } from "./helpers.mjs";
 import { applyPolicy, judge, loadPolicy, parsePolicy, readHar } from "../dist/policy/index.js";
 
 const PERF = fileURLToPath(new URL("./fixtures/perf/", import.meta.url));
@@ -12,7 +13,7 @@ function reply(dir, command) {
 }
 
 function browser(replies) {
-  return { run: async (args) => replies[args.join(" ")] };
+  return driven({ run: async (args) => replies[args.join(" ")] });
 }
 
 const FIXTURES = fileURLToPath(new URL("./fixtures/", import.meta.url));

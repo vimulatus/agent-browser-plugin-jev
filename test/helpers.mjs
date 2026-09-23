@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { agentBrowser } from "../dist/agent-browser.js";
 
 const ACTS = new Set(["click", "fill", "select", "scroll", "wait"]);
 
@@ -11,11 +12,20 @@ export function replay(name) {
   return JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8")).responses;
 }
 
+/**
+ * The real agent-browser adapter over a fake binary: `fake.run` answers each command's argv. The fake's fields land
+ * on the browser, so a test reads `browser.state` and can swap `browser.run` mid-test.
+ */
+export function driven(fake, human = false) {
+  const browser = agentBrowser("jev-test", human, (args) => browser.run(args));
+  return Object.assign(browser, fake);
+}
+
 /** An agent-browser that serves saved pages and moves to the next one when a decision acts. */
-export function scriptedBrowser(states, advance) {
+export function scriptedBrowser(states, advance, human = false) {
   const state = { index: 0, calls: [] };
   const step = advance ?? ((args) => (ACTS.has(args[0]) ? state.index + 1 : state.index));
-  return {
+  return driven({
     state,
     async run(args) {
       state.calls.push(args.join(" "));
@@ -36,7 +46,7 @@ export function scriptedBrowser(states, advance) {
           return {};
       }
     },
-  };
+  }, human);
 }
 
 /** A Jev that answers from a recorded file and keeps every request for the test to check. */

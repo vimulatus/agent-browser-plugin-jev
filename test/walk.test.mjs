@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { defaultOut } from "../dist/run.js";
 import { actionsBefore, walk } from "../dist/walk.js";
-import { lines, replayingJev } from "./helpers.mjs";
+import { driven, lines, replayingJev } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "get url", "console", "errors", "network requests"]);
 
@@ -17,9 +17,9 @@ function walkPages(name) {
 }
 
 /** An agent-browser over saved pages: `open` goes to the page with that url, and a move table follows each act. */
-function walkBrowser(states, moves) {
+function walkBrowser(states, moves, human = false) {
   const state = { index: 0, calls: [] };
-  return {
+  return driven({
     state,
     async run(args) {
       const command = args.join(" ");
@@ -52,7 +52,7 @@ function walkBrowser(states, moves) {
           return {};
       }
     },
-  };
+  }, human);
 }
 
 /** A policy Jev that answers from the next recorded reply and refuses a question that reply does not answer. */
@@ -91,7 +91,7 @@ function json(out, name) {
 async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
   const recorded = scenario(name);
   const browser = walkBrowser(walkPages(recorded.pages), moves);
-  const replay = walkBrowser(walkPages(repro.pages ?? recorded.pages), repro.moves ?? {});
+  const replay = walkBrowser(walkPages(repro.pages ?? recorded.pages), repro.moves ?? {}, true);
   const jev = replayingJev(recorded.walk ?? recorded.responses);
   const policyJev = recorded.policy === undefined ? silent : replayingPolicyJev(recorded.policy);
   const options = {

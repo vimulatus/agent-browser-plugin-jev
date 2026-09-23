@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { AgentBrowser } from "../agent-browser.js";
+import type { Browser } from "../browser.js";
 import type { RequestFact } from "./facts.js";
 
 interface Entry {
@@ -13,7 +13,7 @@ interface Entry {
 const SETTLE_INTERVAL = 100;
 const SETTLE_TIMEOUT = 15_000;
 
-/** The requests of a HAR agent-browser wrote, with the duration of each. A request that never answered has neither. */
+/** The requests of a HAR the browser wrote, with the duration of each. A request that never answered has neither. */
 export function readHar(path: string): RequestFact[] {
   const { log } = JSON.parse(readFileSync(path, "utf8")) as { log: { entries: Entry[] } };
   return log.entries.map((entry) => {
@@ -32,10 +32,10 @@ export function readHar(path: string): RequestFact[] {
 }
 
 /** Reloads the page under a HAR recording, so every request the page makes is timed. */
-export async function recordHar(browser: AgentBrowser): Promise<RequestFact[]> {
-  await browser.run(["network", "har", "start"]);
+export async function recordHar(browser: Browser): Promise<RequestFact[]> {
+  await browser.startHar();
   try {
-    await browser.run(["reload"]);
+    await browser.reload();
     await settle(browser);
   } catch (failure) {
     await stop(browser);
@@ -44,16 +44,15 @@ export async function recordHar(browser: AgentBrowser): Promise<RequestFact[]> {
   return stop(browser);
 }
 
-async function stop(browser: AgentBrowser): Promise<RequestFact[]> {
-  const { path } = (await browser.run(["network", "har", "stop"])) as unknown as { path: string };
-  return readHar(path);
+async function stop(browser: Browser): Promise<RequestFact[]> {
+  return readHar(await browser.stopHar());
 }
 
 /** Reads the request log until nothing is in flight. A request that never answers ends the wait at the timeout. */
-async function settle(browser: AgentBrowser): Promise<void> {
+async function settle(browser: Browser): Promise<void> {
   const deadline = Date.now() + SETTLE_TIMEOUT;
   for (;;) {
-    const { requests } = (await browser.run(["network", "requests"])) as unknown as { requests: { status?: number }[] };
+    const requests = await browser.requests();
     if (requests.every((request) => typeof request.status === "number")) return;
     if (Date.now() >= deadline) return;
     await new Promise((waited) => setTimeout(waited, SETTLE_INTERVAL));

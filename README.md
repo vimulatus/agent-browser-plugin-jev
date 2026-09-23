@@ -2,7 +2,7 @@
 
 A command that drives a browser for an agent. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
 
-Jev drives the browser through the [agent-browser](https://github.com/vercel-labs/agent-browser) binary on PATH.
+Jev drives the browser through the [agent-browser](https://github.com/vercel-labs/agent-browser) binary on PATH. The rest of Jev sees the browser only through the `Browser` interface in `src/browser.ts`, so another driver, such as Playwright, plugs in at `openBrowser` without a change to the run, the walk or the policies.
 
 The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/issues/1).
 

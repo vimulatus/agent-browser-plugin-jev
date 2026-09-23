@@ -1,7 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { commandFor } from "./act.js";
-import type { AgentBrowser } from "./agent-browser.js";
+import type { Browser } from "./browser.js";
 import { pageHash } from "./hash.js";
 import { observe, type Observation } from "./observe.js";
 import type { Previous } from "./policy/index.js";
@@ -34,7 +33,7 @@ export interface Reproduction {
 }
 
 export interface ReproInput {
-  browser: AgentBrowser;
+  browser: Browser;
   /** The walk's saved cookies and storage, loaded into the replay before it opens the start page. */
   state: string;
   out: string;
@@ -59,9 +58,9 @@ function describe(action: Replayable): string {
   }
 }
 
-async function page(browser: AgentBrowser) {
-  const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as { origin: string; snapshot: string };
-  return { elements: parseSnapshot(snapshot.snapshot), hash: pageHash(snapshot.origin, snapshot.snapshot) };
+async function page(browser: Browser) {
+  const snapshot = await browser.snapshot(true);
+  return { elements: parseSnapshot(snapshot.tree), hash: pageHash(snapshot.url, snapshot.tree) };
 }
 
 /**
@@ -77,17 +76,14 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
   const recording = join(evidence, `${number}.webm`);
 
   // The buffers hold what every earlier replay printed and asked for, and this finding quotes only its own.
-  await browser.run(["console", "--clear"]);
-  await browser.run(["errors", "--clear"]);
-  await browser.run(["network", "requests", "--clear"]);
-  // agent-browser 0.38.1 logs no request for the navigation `tab new <url>` makes, so the tab opens blank.
-  await browser.run(["tab", "new", "about:blank"]);
-  await browser.run(["state", "load", input.state]);
-  await browser.run(["record", "start", recording, "--cursor"]);
+  await browser.clearLogs();
+  await browser.openTab();
+  await browser.loadState(input.state);
+  await browser.record(recording);
   try {
-    await browser.run(["open", input.home]);
+    await browser.open(input.home);
     // A request the page makes on load answers after its load event, and the finding can be that request.
-    await browser.run(["wait", "--load", "networkidle"]);
+    await browser.wait("networkidle");
     const replayed: ReproAction[] = [];
     let previous: Previous | undefined;
     for (const action of input.actions) {
@@ -96,12 +92,12 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
       if (element === undefined) return { reproduced: false };
 
       const value = action.fixture === null ? action.value : fixtures[action.fixture];
-      await browser.run(commandFor({ operation: action.kind, ref: element.ref, value }, true) as string[]);
+      await browser.act({ operation: action.kind, ref: element.ref, value });
       // A click that navigates returns before the new page paints, and the shot is the evidence.
-      await browser.run(["wait", "--load", "load"]);
+      await browser.wait("load");
       const screenshot = join(evidence, `${number}-${action.step}.png`);
-      await browser.run(["screenshot", screenshot]);
-      const { url } = (await browser.run(["get", "url"])) as { url: string };
+      await browser.screenshot(screenshot);
+      const url = await browser.url();
 
       replayed.push({ action: describe(action), url, screenshot });
       previous = { hash: before.hash, action: { kind: action.kind, label: action.label } };
@@ -117,7 +113,7 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
       errors: landed.errors.map((error) => error.text),
     };
   } finally {
-    await browser.run(["record", "stop"]);
-    await browser.run(["tab", "close"]);
+    await browser.stopRecording();
+    await browser.closeTab();
   }
 }

@@ -52,10 +52,10 @@ function unaskedJev() {
 
 async function drive(name, goal, overrides = {}, advance) {
   const scenario = JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8"));
-  const browser = scriptedBrowser(pages(scenario.pages), advance);
+  const run_options = options(goal ?? scenario.goal, overrides);
+  const browser = scriptedBrowser(pages(scenario.pages), advance, run_options.human);
   const jev = replayingJev(replay(name));
   const policyJev = unaskedJev();
-  const run_options = options(goal ?? scenario.goal, overrides);
   const result = await run(run_options, { browser, jev, policyJev });
   return { result, browser, jev, policyJev, out: run_options.out };
 }
@@ -293,7 +293,7 @@ test("the recording starts on the page --url opened, not on the page before it",
   ]);
 });
 
-test("a goal run carries durationMs, and jev.status reads back the number the run ended on", async (t) => {
+test("a goal run carries durationMs, and status.json keeps the number the run ended on", async (t) => {
   const { result, out } = await drive("login");
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
