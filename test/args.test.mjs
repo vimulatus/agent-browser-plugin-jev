@@ -79,3 +79,13 @@ test("--policy and --fixtures ride on the same run command, and a walk takes no 
   assert.equal(options.fixtures, "./qa.yaml");
   assert.equal(options.allow, "all");
 });
+
+test("a login page is handed to a window unless --no-handoff, for the seconds --login-timeout gives", () => {
+  const options = parseRunArgs(["g", ...SESSION]);
+  assert.equal(options.handoff, true);
+  assert.equal(options.loginTimeoutMs, 300_000);
+  const unattended = parseRunArgs(["g", ...SESSION, "--no-handoff", "--login-timeout", "30"]);
+  assert.equal(unattended.handoff, false);
+  assert.equal(unattended.loginTimeoutMs, 30_000);
+  assert.throws(() => parseRunArgs(["g", ...SESSION, "--login-timeout", "soon"]), /--login-timeout takes a number of seconds/);
+});

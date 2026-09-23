@@ -19,8 +19,12 @@ export interface RunRequest {
   fixtures?: string;
   record?: string;
   human?: boolean;
+  /** `false` ends the run blocked at a login page instead of opening a window for it. */
+  handoff?: boolean;
+  /** Seconds the window stays open for the person to sign in. */
+  loginTimeout?: number;
   out?: string;
-  /** `true` waits up to 55 s for the run to end, a number waits that many milliseconds. */
+  /** `true` waits up to 55 s for the run to end, a number waits that many milliseconds. A window opened for a login ends the wait too. */
   wait?: boolean | number;
 }
 
@@ -45,6 +49,8 @@ function runArgs(request: RunRequest, session: string, out: string): string[] {
   if (request.fixtures !== undefined) args.push("--fixtures", request.fixtures);
   if (request.record !== undefined) args.push("--record", request.record);
   if (request.human === true) args.push("--human");
+  if (request.handoff === false) args.push("--no-handoff");
+  if (request.loginTimeout !== undefined) args.push("--login-timeout", String(request.loginTimeout));
   return args;
 }
 
@@ -73,13 +79,27 @@ function waitMsOf(wait: RunRequest["wait"]): number {
   return Math.min(Math.max(wait, 0), WAIT_CAP_MS);
 }
 
-function endsWithin(ended: Promise<void>, waitMs: number): Promise<boolean> {
+function loginOpen(out: string): boolean {
+  const path = join(out, "status.json");
+  return existsSync(path) && (JSON.parse(readFileSync(path, "utf8")) as RunState).status === "login";
+}
+
+/**
+ * Whether the run settled within the wait: it ended, or it opened a window for a login. The window is the
+ * person's to act on, so the caller hears about it at once instead of after the wait.
+ */
+function settlesWithin(ended: Promise<void>, out: string, waitMs: number): Promise<boolean> {
   return new Promise((done) => {
-    const timer = setTimeout(() => done(false), waitMs);
-    ended.then(() => {
+    const finish = (settled: boolean) => {
       clearTimeout(timer);
-      done(true);
-    });
+      clearInterval(poll);
+      done(settled);
+    };
+    const timer = setTimeout(() => finish(false), waitMs);
+    const poll = setInterval(() => {
+      if (loginOpen(out)) finish(true);
+    }, 100);
+    ended.then(() => finish(true));
   });
 }
 
@@ -110,7 +130,8 @@ function outOf(request: StatusRequest): string {
 
 /**
  * `jev.run`: starts the run as a detached worker and answers at once with `status: "running"`.
- * With `wait` it answers with the run's final status instead, when the run ends in time.
+ * With `wait` it answers with the run's final status instead, when the run ends in time, or with
+ * `status: "login"` and the page's URL when the run opened a window for a login.
  */
 export async function startRun(request: RunRequest): Promise<RunState> {
   if (request.goal === undefined && request.policy === undefined) throw new Error("jev.run needs a goal or a policy");
@@ -125,7 +146,7 @@ export async function startRun(request: RunRequest): Promise<RunState> {
 
   const { worker, ended } = startWorker(runArgs(request, session, out), out);
   const waitMs = waitMsOf(request.wait);
-  const finished = waitMs > 0 && (await endsWithin(ended, waitMs));
+  const finished = waitMs > 0 && (await settlesWithin(ended, out, waitMs));
   worker.unref();
   return finished ? { runId, ...stateOf(out) } : { runId, out, status: "running" };
 }

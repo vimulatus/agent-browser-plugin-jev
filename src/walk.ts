@@ -204,11 +204,14 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         }
         findings.push(candidate);
         await save("running");
+        const state = join(options.out, "state.json");
+        await deps.browser.run(["state", "save", state]);
         replayed = deps.repro;
         Object.assign(
           candidate,
           await reproduce({
             browser: deps.repro,
+            state,
             out: options.out,
             home: from,
             number: findings.length,

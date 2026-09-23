@@ -1,12 +1,13 @@
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { commandFor } from "./act.js";
 import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
+import { authProfileFor, handoff, loginPage } from "./login.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -41,10 +42,13 @@ export interface RunOptions {
   human: boolean;
   policy?: string;
   fixtures?: string;
+  /** Whether a login page the goal cannot fill is handed to the person in a window. Off, the run ends blocked there. */
+  handoff: boolean;
+  loginTimeoutMs: number;
 }
 
-/** What `<out>/status.json` reports while the run is in flight and once it has ended. */
-export type RunStatus = "running" | "done" | "blocked" | "failed";
+/** What `<out>/status.json` reports while the run is in flight and once it has ended. `login` means a window is open for the person to sign in. */
+export type RunStatus = "running" | "login" | "done" | "blocked" | "failed";
 
 export interface RunResult {
   status: "done" | "blocked";
@@ -57,6 +61,8 @@ export interface RunResult {
   snapshot: string;
   out: string;
   record: string | null;
+  /** Every file the recording went to: one, or one per stretch when a handoff split it. */
+  recordings: string[];
   reason: string | null;
   durationMs: number;
 }
@@ -117,6 +123,19 @@ function blockedByGate(decision: Decision, allow: Allow): string | null {
   return null;
 }
 
+/**
+ * Why the run cannot act on this decision, or null when it can: the goal holds no value for the field, or Jev
+ * sees no move, which is what it answers on a login page when the goal has no value to type at all.
+ */
+function stalledOn(decision: Decision): string | null {
+  if (decision.operation === "BLOCKED") return "no supported operation can make progress";
+  if (decision.operation !== "TYPE_TEXT") return null;
+  if (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD) {
+    return `the goal holds no value for ${decision.label}`;
+  }
+  return null;
+}
+
 function logged(decision: Decision): string | null {
   return decision.password && decision.value !== null ? MASK : decision.value;
 }
@@ -142,6 +161,13 @@ function actedOn(decision: Decision, hash: string): Previous | undefined {
   if (label === null) return undefined;
   if (operation !== "CLICK" && operation !== "TYPE_TEXT" && operation !== "SELECT") return undefined;
   return { hash, action: { kind: operation, label } };
+}
+
+/** The file the recording goes to: the one asked for, then `<name>-2`, `<name>-3` for the stretches after each handoff. */
+function recordingFile(record: string, stretch: number): string {
+  if (stretch === 1) return record;
+  const ext = extname(record);
+  return join(dirname(record), `${basename(record, ext)}-${stretch}${ext}`);
 }
 
 function recent(history: Step[]): Recent[] {
@@ -171,6 +197,9 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   let status: RunResult["status"] = "blocked";
   let reason: string | null = `reached --max-steps ${options.maxSteps}`;
   let steps = 0;
+  const origins = new Set<string>();
+  if (options.url !== undefined) origins.add(new URL(options.url).origin);
+  const recordings: string[] = [];
 
   await mkdir(options.out, { recursive: true });
   const writeJson = async (name: string, value: unknown) => {
@@ -192,6 +221,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       findingsFile,
       out: options.out,
       record: options.record ?? null,
+      recordings,
       model: options.model,
       reason,
       startedAt,
@@ -209,10 +239,21 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     browser = deps.browser;
 
     if (options.url !== undefined) await browser.run(["open", options.url]);
-    if (options.record !== undefined) {
-      await browser.run(["record", "start", options.record, "--cursor"]);
+
+    /** Starts the recording on the file asked for, then on `<name>-2`, `<name>-3` after each handoff, which stops it. */
+    const record = async () => {
+      if (options.record === undefined || recording) return;
+      const file = recordingFile(options.record, recordings.length + 1);
+      await deps.browser.run(["record", "start", file, "--cursor"]);
+      recordings.push(file);
       recording = true;
-    }
+    };
+    const stopRecording = async () => {
+      if (!recording) return;
+      await deps.browser.run(["record", "stop"]);
+      recording = false;
+    };
+    await record();
 
     /**
      * The policy over the page the run is about to act on: judge it, apply the rules, keep what is new.
@@ -242,9 +283,44 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       }
     };
 
+    /**
+     * The goal holds no password, so the login is signed in another way: through the `auth` profile saved for
+     * the page, else by the person in a window. Either way the step is logged as a typed password, masked.
+     * False when the wait for the person ran out, with the reason on the run.
+     */
+    const login = async (page: Observation, step: Step): Promise<boolean> => {
+      step.value = MASK;
+      const profile = await authProfileFor(deps.browser, page.url);
+      if (profile !== null) {
+        await deps.browser.run(["auth", "login", profile]);
+        step.executed = true;
+        step.reason = `signed in with the auth profile ${profile}`;
+        return true;
+      }
+      await stopRecording();
+      const landed = await handoff({
+        browser: deps.browser,
+        session: options.session,
+        url: page.url,
+        origins,
+        timeoutMs: options.loginTimeoutMs,
+        opened: () => write("login"),
+      });
+      if (landed === null) {
+        reason = step.reason = `the login on ${page.url} timed out after ${options.loginTimeoutMs / 1000} s in the window`;
+        await write("running", step);
+        return false;
+      }
+      await record();
+      step.executed = true;
+      step.reason = "signed in by hand in a window";
+      return true;
+    };
+
     let previous: Previous | undefined;
     while (steps < options.maxSteps) {
       observation = await observe(browser);
+      origins.add(new URL(observation.url).origin);
       const last = history.at(-1);
       if (last !== undefined && last.pageChanged === null) {
         last.pageChanged = observation.hash !== last.hash;
@@ -290,15 +366,17 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         model: decision.model,
       };
 
-      if (decision.operation === "BLOCKED") {
-        reason = step.reason = "no supported operation can make progress";
+      const stalled = stalledOn(decision);
+      if (stalled !== null) {
+        if (!options.handoff || !loginPage(observation)) {
+          reason = step.reason = stalled;
+          await write("running", step);
+          break;
+        }
+        if (!(await login(observation, step))) break;
+        history.push(step);
         await write("running", step);
-        break;
-      }
-      if (decision.operation === "TYPE_TEXT" && (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD)) {
-        reason = step.reason = `the goal holds no value for ${decision.label}`;
-        await write("running", step);
-        break;
+        continue;
       }
       const denied = blockedByGate(decision, options.allow);
       if (denied !== null) {
@@ -332,10 +410,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       await write("running", step);
     }
 
-    if (recording) {
-      await browser.run(["record", "stop"]);
-      recording = false;
-    }
+    await stopRecording();
     observation ??= await observe(browser);
     await write(status);
     return {
@@ -348,6 +423,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       snapshot: observation.text,
       out: options.out,
       record: options.record ?? null,
+      recordings,
       reason,
       durationMs: elapsed(),
     };

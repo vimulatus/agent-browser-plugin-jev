@@ -53,7 +53,7 @@ agent-browser-plugin-jev run --policy perf --max-steps 0
 agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-The goal carries every value that gets typed: Jev writes no text, so a password the goal does not name cannot be typed and the run stops instead. A goal run does not apply `--policy`; use form 2 or form 3.
+The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open `status.json` and `jev.status` read `status: "login"` with the page's URL: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A goal run does not apply `--policy`; use form 2 or form 3.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -67,8 +67,10 @@ The goal carries every value that gets typed: Jev writes no text, so a password 
 | `--fixtures` | `<file>` | YAML values a walk types into forms; built-in keys are `email`, `password`, `name`, `phone`, `address` |
 | `--record` | `<file>` | Records to this `.webm` or `.mp4`, cursor included; needs ffmpeg |
 | `--human` | | Moves the pointer along a curve instead of jumping |
+| `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
+| `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
 
-Through the protocol instead of the CLI: `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` takes the same options as JSON and answers `{ runId, out, status }`. agent-browser kills a plugin at 60 s, so the run is detached and `wait: true` holds the answer for at most 55 s. `agent-browser plugin run jev jev.status --payload '{"runId":"..."}'` reports it after that. `plugin.manifest` is what `plugin add` reads.
+Through the protocol instead of the CLI: `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` takes the same options as JSON (`handoff: false` for `--no-handoff`, `loginTimeout` in seconds) and answers `{ runId, out, status }`. agent-browser kills a plugin at 60 s, so the run is detached and `wait: true` holds the answer for at most 55 s, or until the run opens a window for a login. `agent-browser plugin run jev jev.status --payload '{"runId":"..."}'` reports it after that. `plugin.manifest` is what `plugin add` reads.
 
 ## Write a policy
 
@@ -103,7 +105,7 @@ report:
 
 Everything lands in `--out`, named in the result and in `status.json`.
 
-- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, reason, durationMs }` and exits 0 when done, 2 when blocked.
+- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. `recordings` names every file a `--record` went to: two when a login window split it.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
 - A walk prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` and writes `findings.json`; `findingsFile` is its absolute path. A goal run with `--policy` adds the same key.
 - `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so `jev.status` says how long a run has been going.

@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { DEFAULT_MODEL } from "./jev.js";
+import { LOGIN_TIMEOUT_MS } from "./login.js";
 import { VERBS } from "./questions.js";
 import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
 
@@ -23,6 +24,8 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --fixtures <file>  Values a walk types into forms; overrides the built-in keys
   --record <file>    Record the run to this .webm or .mp4, cursor included
   --human            Move the pointer along a curve instead of jumping
+  --no-handoff       End blocked at a login page instead of opening a window for it
+  --login-timeout <s> Seconds to wait for the person to sign in; default ${LOGIN_TIMEOUT_MS / 1000}
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 With no arguments it answers plugin.manifest, jev.run and jev.status on stdin,
@@ -47,6 +50,12 @@ function stepsFrom(value: string): number {
   return steps;
 }
 
+function loginTimeoutFrom(value: string): number {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) throw new UsageError("--login-timeout takes a number of seconds");
+  return seconds * 1000;
+}
+
 /** The `run` command line: one goal, and the flags that bound the run. */
 export function parseRunArgs(argv: string[]): RunOptions {
   const options: RunOptions = {
@@ -57,6 +66,8 @@ export function parseRunArgs(argv: string[]): RunOptions {
     allow: new Set<string>(),
     model: process.env.TYPESAFE_MODEL ?? DEFAULT_MODEL,
     human: false,
+    handoff: true,
+    loginTimeoutMs: LOGIN_TIMEOUT_MS,
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -67,6 +78,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
     }
     if (flag === "--human") {
       options.human = true;
+      continue;
+    }
+    if (flag === "--no-handoff") {
+      options.handoff = false;
       continue;
     }
     const value = argv[++i];
@@ -80,6 +95,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
     else if (flag === "--record") options.record = resolve(value);
     else if (flag === "--allow") options.allow = allowFrom(value);
     else if (flag === "--max-steps") options.maxSteps = stepsFrom(value);
+    else if (flag === "--login-timeout") options.loginTimeoutMs = loginTimeoutFrom(value);
     else throw new UsageError(`unknown option ${flag}`);
   }
   if (options.session === "") throw new UsageError("no session: pass --session or set AGENT_BROWSER_SESSION");
