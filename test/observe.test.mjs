@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { observe } from "../dist/observe.js";
+import { driven } from "./helpers.mjs";
 import { pageHash } from "../dist/hash.js";
 
 function fixture(name) {
@@ -18,7 +19,7 @@ const replies = {
 
 function replaying(overrides = {}) {
   const calls = [];
-  return {
+  return driven({
     calls,
     async run(args) {
       calls.push(args);
@@ -26,7 +27,7 @@ function replaying(overrides = {}) {
       assert.ok(data, `unexpected agent-browser call: ${args.join(" ")}`);
       return data;
     },
-  };
+  });
 }
 
 test("observe composes url, title, text, elements, logs and hash from agent-browser", async () => {

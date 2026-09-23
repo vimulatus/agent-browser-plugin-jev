@@ -1,29 +1,10 @@
-import type { AgentBrowser } from "./agent-browser.js";
+import type { Browser, ConsoleMessage, PageError, Request } from "./browser.js";
 import { pageHash } from "./hash.js";
 import { parseSnapshot, type Element } from "./snapshot.js";
 
+export type { ConsoleMessage, PageError, Request };
+
 export const MAX_TEXT = 6000;
-
-export interface ConsoleMessage {
-  type: string;
-  text: string;
-}
-
-export interface PageError {
-  text: string;
-  url: string | null;
-  line: number | null;
-  column: number | null;
-}
-
-export interface Request {
-  method: string;
-  url: string;
-  status: number | null;
-  resourceType: string;
-  mimeType: string | null;
-  timestamp: number;
-}
 
 /** Everything Jev sees of the page at one moment. `hash` changes when the url or the tree changes. */
 export interface Observation {
@@ -37,40 +18,23 @@ export interface Observation {
   hash: string;
 }
 
-interface Snapshot {
-  origin: string;
-  snapshot: string;
+/** The hash alone, from one snapshot, to check the page has not moved under a decision. */
+export async function snapshotHash(browser: Browser): Promise<string> {
+  const snapshot = await browser.snapshot(true);
+  return pageHash(snapshot.url, snapshot.tree);
 }
 
-/** The hash alone, through one agent-browser call, to check the page has not moved under a decision. */
-export async function snapshotHash(browser: AgentBrowser): Promise<string> {
-  const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as Snapshot;
-  return pageHash(snapshot.origin, snapshot.snapshot);
-}
-
-/** Reads the page through five agent-browser calls and returns one Observation. */
-export async function observe(browser: AgentBrowser): Promise<Observation> {
-  const snapshot = (await browser.run(["snapshot", "-i"])) as unknown as Snapshot;
-  const { title } = (await browser.run(["get", "title"])) as { title: string };
-  const { messages } = (await browser.run(["console"])) as { messages: ConsoleMessage[] };
-  const { errors } = (await browser.run(["errors"])) as { errors: PageError[] };
-  const { requests } = (await browser.run(["network", "requests"])) as { requests: Request[] };
-
+/** Reads the page through five browser calls and returns one Observation. */
+export async function observe(browser: Browser): Promise<Observation> {
+  const snapshot = await browser.snapshot(true);
   return {
-    url: snapshot.origin,
-    title,
-    text: snapshot.snapshot.slice(0, MAX_TEXT),
-    elements: parseSnapshot(snapshot.snapshot),
-    console: messages.map(({ type, text }) => ({ type, text })),
-    errors: errors.map(({ text, url, line, column }) => ({ text, url, line, column })),
-    requests: requests.map(({ method, url, status, resourceType, mimeType, timestamp }) => ({
-      method,
-      url,
-      status,
-      resourceType,
-      mimeType,
-      timestamp,
-    })),
-    hash: pageHash(snapshot.origin, snapshot.snapshot),
+    url: snapshot.url,
+    title: await browser.title(),
+    text: snapshot.tree.slice(0, MAX_TEXT),
+    elements: parseSnapshot(snapshot.tree),
+    console: await browser.console(),
+    errors: await browser.errors(),
+    requests: await browser.requests(),
+    hash: pageHash(snapshot.url, snapshot.tree),
   };
 }

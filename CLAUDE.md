@@ -10,7 +10,7 @@ Load the `coding` skill before you write or edit code.
 
 - **Users** — any agent that can run a shell command, and the people who run those agents. Today an agent drives a browser one command at a time and thinks between each one. First user: Vasu's coding agents.
 - **Works when** — `npm install -g agent-browser-plugin-jev` puts `jev` on PATH, `jev run "<goal>"` lands on the goal page from one command, and `jev run --policy <file>` writes a `findings.json` an agent can turn into a report.
-- **Non-goals** — no plugin protocol: the agent runs `jev`, and `jev` drives the browser. No change to agent-browser core. No text written by Jev: values come from the goal or a fixture file, because Jev only picks and judges. No destructive action unless the run allows it. Nothing that only one user's skills need.
+- **Non-goals** — no plugin protocol: the agent runs `jev`, and `jev` drives the browser. No change to agent-browser core. agent-browser is the only driver, behind the `Browser` interface in `src/browser.ts`; a Playwright or raw Chromium driver gets built only when a user needs what agent-browser cannot do. No text written by Jev: values come from the goal or a fixture file, because Jev only picks and judges. No destructive action unless the run allows it. Nothing that only one user's skills need.
 
 ## Ship
 

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentBrowser } from "../agent-browser.js";
+import { openBrowser } from "../browser.js";
 import { observe } from "../observe.js";
 import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
@@ -29,7 +29,7 @@ export interface Judged {
 export async function judgePage({ session, policyPath, out, jev = typesafeJev() }: JudgePageOptions): Promise<Judged> {
   const elapsed = stopwatch();
   const policy = loadPolicy(policyPath);
-  const browser = agentBrowser(session);
+  const browser = openBrowser(session);
   const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
   const content = policy.collect.includes("content") ? await readContent(browser) : undefined;
   const observation = await observe(browser);

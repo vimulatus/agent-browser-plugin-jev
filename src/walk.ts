@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { commandFor } from "./act.js";
-import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
+import { openBrowser, type Browser } from "./browser.js";
 import { chooseNext, type Chosen } from "./choose.js";
 import { THRESHOLD, type Allow, type Recent } from "./decide.js";
 import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
@@ -65,8 +64,8 @@ export interface WalkResult {
 
 /** What the walk drives: the browser, the session it replays findings on, and Jev for its own and the policy's questions. */
 export interface WalkDeps {
-  browser: AgentBrowser;
-  repro: AgentBrowser;
+  browser: Browser;
+  repro: Browser;
   jev: Jev;
   policyJev: PolicyJev;
 }
@@ -79,8 +78,8 @@ export function defaultWalkDeps(options: WalkOptions): WalkDeps {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
   return {
-    browser: agentBrowser(options.session, options.human),
-    repro: agentBrowser(`${options.session}-repro`, true),
+    browser: openBrowser(options.session, options.human),
+    repro: openBrowser(`${options.session}-repro`, true),
     jev: httpJev(apiKey),
     policyJev: typesafeJev(options.model),
   };
@@ -162,20 +161,20 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   };
   await save("running");
 
-  let browser: AgentBrowser | null = null;
-  let replayed: AgentBrowser | undefined;
+  let browser: Browser | null = null;
+  let replayed: Browser | undefined;
   let recording = false;
   try {
     const deps = injected ?? defaultWalkDeps(options);
     browser = deps.browser;
-    if (options.url !== undefined) await browser.run(["open", options.url]);
+    if (options.url !== undefined) await browser.open(options.url);
     if (options.record !== undefined) {
-      await browser.run(["record", "start", options.record, "--cursor"]);
+      await browser.record(options.record);
       recording = true;
     }
 
     /** Every rule of the policy that fires on one page, with the answers Jev gave the rules to read. */
-    const firesOn = async (on: AgentBrowser, page: Observation, previous: Previous | undefined) => {
+    const firesOn = async (on: Browser, page: Observation, previous: Previous | undefined) => {
       const gathered: Gathered = {
         previous,
         content: policy.collect.includes("content") ? await readContent(on) : undefined,
@@ -205,7 +204,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         findings.push(candidate);
         await save("running");
         const state = join(options.out, "state.json");
-        await deps.browser.run(["state", "save", state]);
+        await deps.browser.saveState(state);
         replayed = deps.repro;
         Object.assign(
           candidate,
@@ -238,7 +237,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       home ??= observation.url;
       origin ??= new URL(home).origin;
       if (new URL(observation.url).origin !== origin) {
-        await browser.run(["open", home]);
+        await browser.open(home);
         previous = undefined;
         observation = await observe(browser);
       }
@@ -265,7 +264,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         }
         jumped = next;
         await save("running");
-        await browser.run(["open", next.url]);
+        await browser.open(next.url);
         continue;
       }
       jumped = null;
@@ -325,11 +324,10 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         continue;
       }
 
-      const command = commandFor(chosen, options.human) as string[];
       try {
-        await browser.run(command);
+        await browser.act(chosen);
       } catch (error) {
-        reason = step.reason = `${command[0]} failed: ${(error as Error).message}`;
+        reason = step.reason = `${chosen.operation} failed: ${(error as Error).message}`;
         await record();
         break;
       }
@@ -346,10 +344,10 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     }
 
     if (recording) {
-      await browser.run(["record", "stop"]);
+      await browser.stopRecording();
       recording = false;
     }
-    if (replayed !== undefined) await replayed.run(["close"]);
+    if (replayed !== undefined) await replayed.close();
     observation ??= await observe(browser);
     await save("done");
     return {
@@ -366,8 +364,8 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     };
   } catch (error) {
     reason = (error as Error).message;
-    if (recording && browser !== null) await browser.run(["record", "stop"]).catch(() => {});
-    if (replayed !== undefined) await replayed.run(["close"]).catch(() => {});
+    if (recording && browser !== null) await browser.stopRecording().catch(() => {});
+    if (replayed !== undefined) await replayed.close().catch(() => {});
     await save("failed");
     throw error;
   }

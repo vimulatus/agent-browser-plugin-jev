@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
+import { driven } from "./helpers.mjs";
 import { applyPolicy, judge, judgeFindings, judgePage, loadPolicy } from "../dist/policy/index.js";
 
 // An orders page that answers 500 on load, shows a "Something went wrong" banner and has a Save button that only
@@ -48,7 +49,7 @@ function replay(...recorded) {
 }
 
 const policy = loadPolicy("bug-hunt");
-const orders = await observe({ run: async (args) => replies[args.join(" ")] });
+const orders = await observe(driven({ run: async (args) => replies[args.join(" ")] }));
 const content = replies.snapshot.snapshot;
 const previous = { hash: orders.hash, action: { kind: "CLICK", label: "Save" } };
 

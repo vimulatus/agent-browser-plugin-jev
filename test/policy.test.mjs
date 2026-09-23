@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
+import { driven } from "./helpers.mjs";
 import { parsePolicy, loadPolicy, applyPolicy } from "../dist/policy/index.js";
 
 function fixture(name) {
@@ -17,7 +18,7 @@ const replies = {
   "get title": fixture("title.json"),
 };
 
-const login = await observe({ run: async (args) => replies[args.join(" ")] });
+const login = await observe(driven({ run: async (args) => replies[args.join(" ")] }));
 const errors = loadPolicy(fileURLToPath(new URL("../policies/errors.yaml", import.meta.url)));
 
 test("the errors policy loads with its four collections, one measure and three rules", () => {

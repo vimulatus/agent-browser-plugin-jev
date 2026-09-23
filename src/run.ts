@@ -2,8 +2,7 @@ import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import { commandFor } from "./act.js";
-import { agentBrowser, type AgentBrowser } from "./agent-browser.js";
+import { openBrowser, type Browser } from "./browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
@@ -69,7 +68,7 @@ export interface RunResult {
 
 /** What the loop drives. Tests inject a scripted browser and recorded Jev replies. */
 export interface Deps {
-  browser: AgentBrowser;
+  browser: Browser;
   jev: Jev;
   policyJev: PolicyJev;
 }
@@ -104,7 +103,7 @@ export function defaultDeps(options: RunOptions): Deps {
   const apiKey = process.env.TYPESAFE_API_KEY;
   if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
   return {
-    browser: agentBrowser(options.session, options.human),
+    browser: openBrowser(options.session, options.human),
     jev: httpJev(apiKey),
     policyJev: typesafeJev(options.model),
   };
@@ -231,26 +230,26 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   };
   await write("running");
 
-  let browser: AgentBrowser | null = null;
+  let browser: Browser | null = null;
   let recording = false;
   try {
     const deps = injected ?? defaultDeps(options);
     const jev = deps.jev;
     browser = deps.browser;
 
-    if (options.url !== undefined) await browser.run(["open", options.url]);
+    if (options.url !== undefined) await browser.open(options.url);
 
     /** Starts the recording on the file asked for, then on `<name>-2`, `<name>-3` after each handoff, which stops it. */
     const record = async () => {
       if (options.record === undefined || recording) return;
       const file = recordingFile(options.record, recordings.length + 1);
-      await deps.browser.run(["record", "start", file, "--cursor"]);
+      await deps.browser.record(file);
       recordings.push(file);
       recording = true;
     };
     const stopRecording = async () => {
       if (!recording) return;
-      await deps.browser.run(["record", "stop"]);
+      await deps.browser.stopRecording();
       recording = false;
     };
     await record();
@@ -292,7 +291,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       step.value = MASK;
       const profile = await authProfileFor(deps.browser, page.url);
       if (profile !== null) {
-        await deps.browser.run(["auth", "login", profile]);
+        await deps.browser.signIn(profile);
         step.executed = true;
         step.reason = `signed in with the auth profile ${profile}`;
         return true;
@@ -300,7 +299,6 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       await stopRecording();
       const landed = await handoff({
         browser: deps.browser,
-        session: options.session,
         url: page.url,
         origins,
         timeoutMs: options.loginTimeoutMs,
@@ -400,11 +398,10 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         break;
       }
 
-      const command = commandFor(decision, options.human) as string[];
       try {
-        await browser.run(command);
+        await browser.act(decision);
       } catch (error) {
-        reason = step.reason = `${command[0]} failed: ${(error as Error).message}`;
+        reason = step.reason = `${decision.operation} failed: ${(error as Error).message}`;
         await write("running", step);
         break;
       }
@@ -433,7 +430,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     };
   } catch (error) {
     reason = (error as Error).message;
-    if (recording && browser !== null) await browser.run(["record", "stop"]).catch(() => {});
+    if (recording && browser !== null) await browser.stopRecording().catch(() => {});
     await write("failed");
     throw error;
   }
