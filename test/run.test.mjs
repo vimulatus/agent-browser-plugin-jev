@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { defaultOut, run } from "../dist/run.js";
-import { runStatus } from "../dist/worker.js";
 import { lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
@@ -117,7 +116,7 @@ test("a goal run with --policy raises the console error the login page logs", as
   assert.deepEqual(policyJev.calls, [], "a policy with no judge section asks Jev nothing");
 });
 
-test("a goal run with --policy names findings.json, and jev.status reads the same path back", async (t) => {
+test("a goal run with --policy names findings.json, and status.json names the same path", async (t) => {
   const { result, out } = await drive("login-policy", null, { policy: "errors" });
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
@@ -125,7 +124,6 @@ test("a goal run with --policy names findings.json, and jev.status reads the sam
   assert.equal(result.findingsFile, file);
   assert.ok(isAbsolute(result.findingsFile), result.findingsFile);
   assert.equal(status(out).findingsFile, file);
-  assert.equal(runStatus({ out }).findingsFile, file);
 });
 
 test("a policy that collects a HAR is refused: a goal run cannot reload the page under itself", async (t) => {
@@ -306,8 +304,7 @@ test("a goal run carries durationMs, and jev.status reads back the number the ru
     `the result holds durationMs ${result.durationMs}`,
   );
   assert.ok(result.durationMs >= written, "the result is measured after the last status write");
-  assert.equal(runStatus({ out }).durationMs, written);
-  assert.equal(runStatus({ out }).durationMs, written, "a run that has ended reports the same duration every time");
+  assert.equal(status(out).durationMs, written, "a run that has ended reports the same duration every time");
 });
 
 const LOGIN = "http://127.0.0.1:8765/login.html";
@@ -360,7 +357,7 @@ test("a login page the goal cannot fill is handed to a window, and the run goes 
   assert.equal(status(out).status, "done");
 });
 
-test("status.json reads login with the page while the window is open, and jev.status reports it", async (t) => {
+test("status.json reads login with the page while the window is open", async (t) => {
   const run_options = options("open the settings page");
   t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
   const browser = scriptedBrowser(pages("login"), signsIn([0, 3]));
@@ -368,7 +365,7 @@ test("status.json reads login with the page while the window is open, and jev.st
   const seen = [];
   browser.run = async (args) => {
     if (args.join(" ") === "snapshot -i" && browser.state.calls.includes(HEADED) && seen.length === 0) {
-      seen.push(runStatus({ out: run_options.out }));
+      seen.push(status(run_options.out));
     }
     return served(args);
   };

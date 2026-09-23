@@ -179,7 +179,7 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
   );
 });
 
-// A title says what the user can see happening. What made it happen is the reader's job, not the plugin's.
+// A title says what the user can see happening. What made it happen is the reader's job, not Jev's.
 const CAUSAL = [/because/i, /due to/i, /caused by/i, /bug in/i];
 
 test("every title of every shipped policy names a behaviour and none names a cause", () => {

@@ -1,41 +1,21 @@
 ---
 name: jev-browser
-description: Drive a browser from one goal, or judge what it shows from one policy file, through the agent-browser plugin agent-browser-plugin-jev. Use when a task needs a browser taken to a page, a page checked for errors or slow requests, or an app walked for bugs with evidence. Not for a single browser command, which agent-browser runs on its own.
+description: Drive a browser from one goal, or judge what it shows from one policy file, with the `jev` command. Use when a task needs a browser taken to a page, a page checked for errors or slow requests, or an app walked for bugs with evidence. Not for a single browser command, which agent-browser runs on its own.
 ---
 
-# Jev over agent-browser
+# Jev
 
 One command reaches a page. One policy file turns what the browser shows into findings you can report. Jev picks every action and answers every question, so you do not think between the steps.
 
 ## Install
 
-From any directory, including a bun or yarn project:
-
 ```bash
-git clone https://github.com/vimulatus/agent-browser-plugin-jev
-cd agent-browser-plugin-jev
-pnpm install && pnpm build && npm link
+npm install -g agent-browser-plugin-jev
 ```
 
-Then write `~/.agent-browser/config.json`:
+This puts `jev` on PATH. It needs the `agent-browser` binary on PATH too. From a clone: `pnpm install && pnpm build && npm link`, and `pnpm build` again after a `git pull`.
 
-```json
-{
-  "plugins": [
-    {
-      "name": "jev",
-      "command": "agent-browser-plugin-jev",
-      "capabilities": ["command.run", "jev.run", "jev.status"]
-    }
-  ]
-}
-```
-
-Check it: `agent-browser plugin run jev jev.status --payload '{"runId":"x"}'` answers `no run x`. After a `git pull`, run `pnpm build` again.
-
-`agent-browser plugin add vimulatus/agent-browser-plugin-jev` is the per-project form. It registers `npx -y github:...` in `./agent-browser.json`, which npm refuses to run in a project whose `package.json` pins another package manager through `devEngines` (`EBADDEVENGINES`).
-
-Export `TYPESAFE_API_KEY` in the shell that runs `agent-browser`. A policy with no `judge` section needs no key.
+Export `TYPESAFE_API_KEY` in the shell that runs `jev`. A policy with no `judge` section needs no key.
 
 ## The three things it does
 
@@ -43,17 +23,17 @@ Export `TYPESAFE_API_KEY` in the shell that runs `agent-browser`. A policy with 
 export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix jev)"
 
 # 1. reach a page
-agent-browser-plugin-jev run "log in as alice@example.com with password secret and open Settings" \
+jev run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 
 # 2. judge the page the session is already on
-agent-browser-plugin-jev run --policy perf --max-steps 0
+jev run --policy perf --max-steps 0
 
 # 3. walk the app and write findings.json
-agent-browser-plugin-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open `status.json` and `jev.status` read `status: "login"` with the page's URL: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A goal run does not apply `--policy`; use form 2 or form 3.
+The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open, stderr says `jev: sign in on the window at <url>` and `status.json` reads `status: "login"`: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A goal run does not apply `--policy`; use form 2 or form 3.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -70,7 +50,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
 
-Through the protocol instead of the CLI: `agent-browser plugin run jev jev.run --payload '{"goal":"...","wait":true}'` takes the same options as JSON (`handoff: false` for `--no-handoff`, `loginTimeout` in seconds) and answers `{ runId, out, status }`. agent-browser kills a plugin at 60 s, so the run is detached and `wait: true` holds the answer for at most 55 s, or until the run opens a window for a login. `agent-browser plugin run jev jev.status --payload '{"runId":"..."}'` reports it after that. `plugin.manifest` is what `plugin add` reads.
+A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `jev: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 
 ## Write a policy
 
@@ -108,8 +88,8 @@ Everything lands in `--out`, named in the result and in `status.json`.
 - A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. `recordings` names every file a `--record` went to: two when a login window split it.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
 - A walk prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` and writes `findings.json`; `findingsFile` is its absolute path. A goal run with `--policy` adds the same key.
-- `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so `jev.status` says how long a run has been going.
+- `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so it says how long a run has been going.
 
-`findings.json` is `{ findings, summary }`. Read `summary` first: `{ title, severity, where }` per finding. Each entry of `findings` adds `step`, `evidence`, `repeats` (the later steps that saw the same thing), and, when the walk replayed it, `reproduced`, `repro` (each action with the screenshot of the page it produced), `recording`, `console` and `errors`. Write your report from those fields. The plugin writes titles from templates and no prose.
+`findings.json` is `{ findings, summary }`. Read `summary` first: `{ title, severity, where }` per finding. Each entry of `findings` adds `step`, `evidence`, `repeats` (the later steps that saw the same thing), and, when the walk replayed it, `reproduced`, `repro` (each action with the screenshot of the page it produced), `recording`, `console` and `errors`. Write your report from those fields. Jev writes titles from templates and no prose.
 
 Also in `--out`: `observed.jsonl` (the page at every step), `inferred.jsonl` (every decision and every Jev answer, with probabilities), `steps.jsonl`, `frontier.json` (every control seen, with `tried`), `unfilled.json` (fields no fixture value fitted) and `evidence/`.

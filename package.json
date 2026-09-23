@@ -1,7 +1,7 @@
 {
   "name": "agent-browser-plugin-jev",
   "version": "0.2.0",
-  "description": "agent-browser plugin: Jev drives the browser from one goal or one policy",
+  "description": "Jev drives a browser from one goal or one policy",
   "type": "module",
   "license": "Apache-2.0",
   "repository": "github:vimulatus/agent-browser-plugin-jev",
@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "bin": {
+    "jev": "./dist/main.js",
     "agent-browser-plugin-jev": "./dist/main.js"
   },
   "files": [

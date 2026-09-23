@@ -11,9 +11,6 @@ const skill = readFileSync(`${root}SKILL.md`, "utf8");
 
 /** Every name the docs must carry is read back out of the package, so a rename breaks this test. */
 const flags = [...new Set(USAGE.match(/--[a-z][a-z-]*/g))];
-const requestTypes = [
-  ...readFileSync(`${root}src/protocol.ts`, "utf8").matchAll(/envelope\.type === "([^"]+)"/g),
-].map((match) => match[1]);
 const policies = readdirSync(`${root}policies`).map((file) => file.replace(/\.yaml$/, ""));
 
 function documents(text, token) {
@@ -23,11 +20,6 @@ function documents(text, token) {
 test("the README names every run flag", () => {
   assert.ok(flags.length >= 10, `read ${flags.length} flags out of USAGE`);
   for (const flag of flags) assert.ok(documents(readme, flag), `README does not name ${flag}`);
-});
-
-test("the README names every request type the plugin answers", () => {
-  assert.ok(requestTypes.length >= 3, `read ${requestTypes.length} request types out of protocol.ts`);
-  for (const type of requestTypes) assert.ok(documents(readme, type), `README does not name ${type}`);
 });
 
 test("the README names everything a policy can collect", () => {
@@ -61,7 +53,7 @@ test("SKILL.md carries the install, the policy grammar and both run forms", () =
   for (const collection of COLLECTIONS) {
     assert.ok(documents(skill, collection), `SKILL.md does not name collect: ${collection}`);
   }
-  for (const token of ["npm link", "~/.agent-browser/config.json", "--policy", "--max-steps", "findings.json"]) {
+  for (const token of ["npm install -g agent-browser-plugin-jev", "--policy", "--max-steps", "findings.json"]) {
     assert.ok(skill.includes(token), `SKILL.md does not name ${token}`);
   }
 });

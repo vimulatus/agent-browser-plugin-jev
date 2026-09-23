@@ -99,7 +99,7 @@ const EVIDENCE: { prefix: Path; key: string }[] = [
 
 const POLICIES_DIR = fileURLToPath(new URL("../../policies/", import.meta.url));
 
-/** The path as given, or a policy shipped with the plugin by name (`errors`, `errors.yaml`). */
+/** The path as given, or a policy shipped with the package by name (`errors`, `errors.yaml`). */
 function resolvePolicyPath(name: string): string {
   if (existsSync(name)) return name;
   const shipped = `${POLICIES_DIR}${name.endsWith(".yaml") ? name : `${name}.yaml`}`;

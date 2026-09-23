@@ -4,10 +4,10 @@ import { LOGIN_TIMEOUT_MS } from "./login.js";
 import { VERBS } from "./questions.js";
 import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
 
-export const USAGE = `agent-browser-plugin-jev
+export const USAGE = `jev
 
-  agent-browser-plugin-jev run "<goal>" [options]
-  agent-browser-plugin-jev run --policy <file> [options]
+  jev run "<goal>" [options]
+  jev run --policy <file> [options]
 
 With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.
@@ -28,9 +28,6 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --login-timeout <s> Seconds to wait for the person to sign in; default ${LOGIN_TIMEOUT_MS / 1000}
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
-With no arguments it answers plugin.manifest, jev.run and jev.status on stdin,
-over agent-browser.plugin.v1. Register it with
-  agent-browser plugin add vimulatus/agent-browser-plugin-jev
 `;
 
 export class UsageError extends Error {}

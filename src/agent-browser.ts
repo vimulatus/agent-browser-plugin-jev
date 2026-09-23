@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-/** One agent-browser session the plugin drives. `run(["snapshot", "-i"])` returns the command's `data`. */
+/** One agent-browser session Jev drives. `run(["snapshot", "-i"])` returns the command's `data`. */
 export interface AgentBrowser {
   run(args: string[]): Promise<Record<string, unknown>>;
 }
