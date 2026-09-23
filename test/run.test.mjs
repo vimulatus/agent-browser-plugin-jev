@@ -116,14 +116,13 @@ test("a goal run with --policy raises the console error the login page logs", as
   assert.deepEqual(policyJev.calls, [], "a policy with no judge section asks Jev nothing");
 });
 
-test("a goal run with --policy names findings.json, and jev.status reads the same path back", async (t) => {
+test("a goal run with --policy names findings.json, and status.json names the same path", async (t) => {
   const { result, out } = await drive("login-policy", null, { policy: "errors" });
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   const file = join(out, "findings.json");
   assert.equal(result.findingsFile, file);
   assert.ok(isAbsolute(result.findingsFile), result.findingsFile);
-  assert.equal(status(out).findingsFile, file);
   assert.equal(status(out).findingsFile, file);
 });
 
@@ -305,7 +304,6 @@ test("a goal run carries durationMs, and jev.status reads back the number the ru
     `the result holds durationMs ${result.durationMs}`,
   );
   assert.ok(result.durationMs >= written, "the result is measured after the last status write");
-  assert.equal(status(out).durationMs, written);
   assert.equal(status(out).durationMs, written, "a run that has ended reports the same duration every time");
 });
 
