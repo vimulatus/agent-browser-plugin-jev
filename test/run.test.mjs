@@ -238,16 +238,21 @@ test("each typed step logs the probability of every offered value", async (t) =>
   assert.deepEqual(click.valueProbabilities, {});
 });
 
-test("a destructive target is skipped without --allow", async (t) => {
-  const { result, browser, out } = await drive("destructive");
+test("a destructive click without --allow ends the run blocked on the first refusal (#77)", async (t) => {
+  const { result, browser, jev, out } = await drive("destructive");
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
+  const refusal = "delete is destructive and not in --allow: did not click Delete account";
   assert.equal(result.status, "blocked");
+  assert.equal(result.reason, refusal);
+  assert.equal(result.steps, 1);
+  assert.equal(jev.requests.length, 1, "a refused click is not asked again");
   assert.equal(result.actions, 0);
   assert.deepEqual(acts(browser), []);
+  assert.equal(status(out).reason, refusal);
   const [skipped] = steps(out);
   assert.equal(skipped.executed, false);
-  assert.match(skipped.reason, /delete is destructive and not in --allow/);
+  assert.equal(skipped.reason, refusal);
   assert.equal(skipped.destructive.probability, 0.96);
 });
 
@@ -287,6 +292,35 @@ test("three acts that change nothing stop the run", async (t) => {
   assert.equal(acts(browser).length, 3);
   assert.match(result.reason, /left the page unchanged/);
   assert.equal(status(out).reason, result.reason);
+});
+
+test("three WAITs on a page that does not change end the run blocked (#80)", async (t) => {
+  const { result, browser, jev, out } = await drive("wait-stuck", null, { maxSteps: 4 });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "the page did not change after 3 WAITs in a row");
+  assert.equal(result.steps, 3);
+  assert.equal(jev.requests.length, 3);
+  assert.deepEqual(acts(browser), Array(3).fill("wait --load networkidle"));
+  assert.equal(status(out).reason, result.reason);
+});
+
+test("a WAIT after which the page changes starts the count again", async (t) => {
+  let waits = 0;
+  const { result, jev, out } = await drive("wait-loads", null, {}, (args, state) => {
+    if (args[0] === "wait") waits += 1;
+    return waits >= 3 ? 1 : state.index;
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(result.steps, 6, "two WAITs on the loaded page after one that loaded it do not stop the run");
+  assert.equal(jev.requests.length, 6);
+  assert.deepEqual(
+    jev.requests[5].state.recent_actions.map((action) => action.pageChanged),
+    [false, false, true, false, false],
+  );
 });
 
 test("a field with no value in the goal blocks the run and types nothing", async (t) => {

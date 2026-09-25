@@ -164,5 +164,17 @@
       "snapshot": "- heading \"Profile\" [level=1, ref=e1]\n- textbox \"Display name\" [ref=e2]: Ada\n- button \"Save\" [ref=e3]",
       "full": "- heading \"Profile\" [level=1, ref=e1]\n- generic\n  - LabelText\n    - StaticText \"Display name\"\n    - textbox \"Display name\" [ref=e2]: Ada\n      - StaticText \"Ada\"\n  - button \"Save\" [ref=e3]\n- status\n  - StaticText \"Saved\""
     }
+  ],
+  "loading": [
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- link \"Back\" [ref=e2]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/orders.html",
+      "title": "Orders",
+      "snapshot": "- heading \"Orders\" [level=1, ref=e1]\n- link \"Order 1042\" [ref=e3]\n- link \"Back\" [ref=e2]"
+    }
   ]
 }

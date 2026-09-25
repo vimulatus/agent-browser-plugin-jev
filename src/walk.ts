@@ -4,7 +4,7 @@ import { loadAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { openRun, StoreFull } from "./cap.js";
 import { chooseNext, type Chosen } from "./choose.js";
-import { THRESHOLD, type Allow, type Recent } from "./decide.js";
+import type { Recent } from "./decide.js";
 import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
 import { loadFixtures } from "./fixtures.js";
 import { frontier, type Entry } from "./frontier.js";
@@ -22,7 +22,7 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
-import { MASK, type RunOptions, type RunStatus } from "./run.js";
+import { MASK, refused, type RunOptions, type RunStatus } from "./run.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stopwatch } from "./stopwatch.js";
@@ -87,14 +87,6 @@ export function defaultWalkDeps(options: WalkOptions): WalkDeps {
     jev: httpJev(apiKey),
     policyJev: typesafeJev(options.model),
   };
-}
-
-function denied(chosen: Chosen, allow: Allow): string | null {
-  const gate = chosen.destructive;
-  if (gate === null || gate.probability <= THRESHOLD) return null;
-  const verb = gate.verb ?? "change";
-  if (allow !== "all" && !allow.has(verb)) return `${verb} is destructive and not in --allow`;
-  return null;
 }
 
 /** The actions the walk took before this step, oldest first. A finding is reproduced by replaying them. */
@@ -301,7 +293,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         await save("running");
       };
 
-      const deny = denied(chosen, options.allow);
+      const deny = refused(chosen.destructive, options.allow);
       if (deny !== null) {
         chosen.entry.tried = true;
         step.reason = deny;
