@@ -12,6 +12,7 @@ export const USAGE = `${NAME}
   ${NAME} init
   ${NAME} session reset <session>
   ${NAME} stop <session>
+  ${NAME} tail <session> [--json]
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
 to .gitignore. It is the project scope; ~/${STATE_DIR}/ is the global one.
@@ -20,6 +21,9 @@ session reset closes the agent-browser session of that name, deletes its runs an
 its sign-in from the active scope and the sign-in agent-browser saved for it, then
 prints { session, deleted } as JSON. deleted lists what it removed, empty when the
 session had no state.
+
+tail prints the steps of the session's newest run as they land, one line each
+as a run prints them on stderr, until it ends; --json prints each step as JSON.
 
 stop asks the session's running run to stop after the step it is on. Ctrl-C and
 SIGTERM do the same for a run in this shell. The run ends stopped, keeps its

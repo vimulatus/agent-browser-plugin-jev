@@ -5,6 +5,7 @@ import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { run, type RunOptions } from "./run.js";
 import { stopSession } from "./runs.js";
+import { tail } from "./tail.js";
 import { discoverScopes, init } from "./scope.js";
 import { newRunDir, resetSession } from "./session.js";
 import { walk, type WalkOptions } from "./walk.js";
@@ -49,6 +50,13 @@ async function main(argv: string[]): Promise<number> {
         : `${NAME}: deleted ${reset.deleted.join(", ")}\n`,
     );
     process.stdout.write(`${JSON.stringify(reset)}\n`);
+    return 0;
+  }
+  if (argv[0] === "tail") {
+    const json = argv.includes("--json");
+    const names = argv.slice(1).filter((arg) => arg !== "--json");
+    if (names.length !== 1 || names[0].startsWith("--")) throw new UsageError("tail takes one session name, and --json");
+    await tail(discoverScopes(), names[0], { json, write: (line) => process.stdout.write(`${line}\n`) });
     return 0;
   }
   if (argv[0] === "stop") {

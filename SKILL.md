@@ -61,7 +61,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 
 `config.json` from the project merges over the global one. `${VAR}` in a string reads the environment; an unset one is an error that names it.
 
-`soab stop <session>` stops the session's running run from any shell, after the step it is on; Ctrl-C does the same in the run's own shell. The run ends `stopped`, keeps its sign-in, leaves the browser on the page, and exits 3.
+`soab tail <session>` follows the session's newest run from another shell, printing each step as it lands until the run ends; `--json` prints the steps as JSON. `soab stop <session>` stops the session's running run from any shell, after the step it is on; Ctrl-C does the same in the run's own shell. The run ends `stopped`, keeps its sign-in, leaves the browser on the page, and exits 3.
 
 A run blocks until it ends and prints one JSON line on stdout. Each step prints one line on stderr as it happens, such as `step 5 · CLICK "Verify" · 0.96`; `--quiet` turns them off. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 

@@ -311,6 +311,14 @@ These lines go to stderr while the run is in flight; stdout stays the one JSON l
 
 `status` in `status.json` is `running`, `login`, `done`, `blocked`, `stopped` or `failed`.
 
+### Follow a run from another shell
+
+```bash
+soab tail checkout
+```
+
+It finds the session's newest run and prints its steps as they land, each in the form the run prints on stderr, until the run's `status.json` leaves `running`; then it exits 0. A run that has already ended prints its steps and exits. `--json` prints each step as the JSON object `inferred.jsonl` (a walk's `steps.jsonl`) holds, one per line, with secrets already masked. A session with no runs exits 1.
+
 ### Stop a run
 
 ```bash
