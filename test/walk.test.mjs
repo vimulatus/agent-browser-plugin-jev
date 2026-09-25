@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
+import { activeScope } from "../dist/scope.js";
 import { newRunDir } from "../dist/session.js";
 import { actionsBefore, walk } from "../dist/walk.js";
 import { driven, isolatedScopes, lines, replayingJev } from "./helpers.mjs";
@@ -88,7 +89,7 @@ function json(out, name) {
   return JSON.parse(readFileSync(join(out, name), "utf8"));
 }
 
-async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
+async function drive(name, { moves = {}, repro = {}, scopes = isolatedScopes(), ...overrides } = {}) {
   const recorded = scenario(name);
   const browser = walkBrowser(walkPages(recorded.pages), moves);
   const replay = walkBrowser(walkPages(repro.pages ?? recorded.pages), repro.moves ?? {}, true);
@@ -105,7 +106,7 @@ async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
     policy: "errors",
     ...overrides,
   };
-  const result = await walk(options, { browser, repro: replay, jev, policyJev, scopes: isolatedScopes() });
+  const result = await walk(options, { browser, repro: replay, jev, policyJev, scopes });
   return { result, browser, repro: replay, jev, policyJev, out: options.out };
 }
 
@@ -132,6 +133,21 @@ test("a walk fills a form from the fixtures, and a field no fixture fits lands i
   assert.equal(result.steps, 4);
   assert.equal(result.actions, 3);
   assert.match(result.reason, /every control the walk found has been tried/);
+});
+
+test("a walk loads the session's saved sign-in before it opens the start page", async (t) => {
+  const scopes = isolatedScopes();
+  await activeScope(scopes).store.put("sessions/jev-test/auth.json", '{"cookies":[],"origins":[]}');
+  const { browser, out } = await drive("walk-signup", {
+    url: "http://127.0.0.1:8765/signup.html",
+    moves: { "0 fill @e2 jev.tester@example.com": 1, "1 fill @e3 Test-Passw0rd-42": 2, "2 click @e5": 3 },
+    scopes,
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  const [load, open] = acts(browser);
+  assert.match(load, /^state load /);
+  assert.equal(open, "open http://127.0.0.1:8765/signup.html");
 });
 
 test("the fixture Choice offers every key and a NONE, and the walk logs the key it used", async (t) => {

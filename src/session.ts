@@ -12,6 +12,11 @@ export function sessionKey(session: string): string {
   return `sessions/${session}`;
 }
 
+/** The store key of a session's sign-in: the cookies and storage `Browser.saveState` writes. */
+export function authKey(session: string): string {
+  return `${sessionKey(session)}/auth.json`;
+}
+
 /**
  * Creates `sessions/<session>/runs/<timestamp>-<suffix>/` in the active scope and returns its path. The names sort
  * in the order the runs started, and the suffix keeps two runs in one millisecond apart.

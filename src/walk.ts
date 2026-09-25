@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { loadAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { chooseNext, type Chosen } from "./choose.js";
 import { THRESHOLD, type Allow, type Recent } from "./decide.js";
@@ -22,7 +23,7 @@ import {
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
 import { MASK, type RunOptions, type RunStatus } from "./run.js";
-import { discoverScopes, type Scopes } from "./scope.js";
+import { activeScope, discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stopwatch } from "./stopwatch.js";
 /** A walk is a run with a policy and no goal. */
@@ -69,7 +70,7 @@ export interface WalkDeps {
   repro: Browser;
   jev: Jev;
   policyJev: PolicyJev;
-  /** Where `--policy` looks up a name; discovered from the working directory and home when absent. */
+  /** Where `--policy` looks up a name and the session keeps its sign-in; discovered from the working directory and home when absent. */
   scopes?: Scopes;
 }
 
@@ -115,7 +116,8 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
  */
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
   const elapsed = stopwatch();
-  const policy = await loadPolicy(options.policy, injected?.scopes ?? discoverScopes());
+  const scopes = injected?.scopes ?? discoverScopes();
+  const policy = await loadPolicy(options.policy, scopes);
   if (policy.collect.includes("har")) {
     throw new Error(
       `policy ${options.policy}: a HAR is recorded over a reload, which a walk cannot do; judge one page with --max-steps 0`,
@@ -170,6 +172,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   try {
     const deps = injected ?? defaultWalkDeps(options);
     browser = deps.browser;
+    await loadAuth(activeScope(scopes).store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
     if (options.record !== undefined) {
       await browser.record(options.record);
