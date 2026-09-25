@@ -33,7 +33,7 @@ soab run --policy perf --max-steps 0
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open, stderr says `soab: sign in on the window at <url>` and `status.json` reads `status: "login"`: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A session's sign-in carries to its next run: the run saves it as `sessions/<session>/auth.json` once the person signs in on the window and when a run ends done, and a goal run or a walk of the session loads it before its first step, so reuse one `--session` per app and sign in once. A goal run does not apply `--policy`; use form 2 or form 3. A password, a one-time code or a card number the run types is written as `•••` in every file and on stdout.
+The goal carries every value that gets typed: Jev writes no text. A sign-in the goal holds no password for ends the run blocked with `kind: "sign_in"`, unless a saved `agent-browser auth` profile for that page signs in: ask your person for the fields and `resume`. Only a captcha, or a page Jev cannot name, opens a window for the person, and only when the run has a terminal and a display; stderr then says `soab: the page needs a person, finish it on the window at <url>` and `status.json` reads `status: "login"`: tell the person to finish it there. The run closes the window once they are through and goes on headless. `--login-timeout` bounds the wait, and `--no-handoff` ends the run blocked instead of either. A session's sign-in carries to its next run: the run saves it as `sessions/<session>/auth.json` once the person signs in on the window and when a run ends done, and a goal run or a walk of the session loads it before its first step, so reuse one `--session` per app and sign in once. A goal run does not apply `--policy`; use form 2 or form 3. A password, a one-time code or a card number the run types is written as `•••` in every file and on stdout.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -47,8 +47,8 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--fixtures` | `<file>` | YAML values a walk types into forms; built-in keys are `email`, `password`, `name`, `phone`, `address` |
 | `--record` | `<file>` | Records to this `.webm` or `.mp4`, cursor included; needs ffmpeg |
 | `--human` | | Moves the pointer along a curve instead of jumping |
-| `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
-| `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+| `--no-handoff` | | Ends the run blocked instead of signing in with a saved auth profile or opening a window for a captcha |
+| `--login-timeout` | `<seconds>` | How long the window stays open for the person; default 300 |
 | `--quiet` | | Prints no line per step on stderr |
 
 ## Scopes

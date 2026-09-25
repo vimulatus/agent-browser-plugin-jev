@@ -9,7 +9,7 @@ import { openRun, StoreFull, type RunFiles } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { checkKey, DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
-import { authProfileFor, handoff, loginPage } from "./login.js";
+import { authProfileFor, handoff } from "./login.js";
 import { NAME } from "./name.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
@@ -50,8 +50,10 @@ export interface RunOptions {
   human: boolean;
   policy?: string;
   fixtures?: string;
-  /** Whether a login page the goal cannot fill is handed to the person in a window. Off, the run ends blocked there. */
+  /** Whether a blocked page may be signed in with a saved auth profile, or shown to the person in a window. */
   handoff: boolean;
+  /** The run can show a window: it has a display and a terminal. Without one, a captcha ends the run like any blocker. */
+  display?: boolean;
   loginTimeoutMs: number;
   /** Where each step's line goes as it happens; the command sends it to stderr unless `--quiet`. */
   progress?: (line: string) => void;
@@ -384,9 +386,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
      * the page, else by the person in a window. Either way the step is logged as a typed password, masked.
      * False when the wait for the person ran out, with the reason on the run.
      */
-    const login = async (page: Observation, step: Step): Promise<boolean> => {
+    const login = async (page: Observation, step: Step, profile: string | null): Promise<boolean> => {
       step.value = MASK;
-      const profile = await authProfileFor(deps.browser, page.url);
       if (profile !== null) {
         await deps.browser.signIn(profile);
         step.executed = true;
@@ -401,7 +402,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         timeoutMs: options.loginTimeoutMs,
         opened: async () => {
           // The run blocks its caller, so the caller learns of the window from stderr, not from status.json.
-          process.stderr.write(`${NAME}: sign in on the window at ${page.url}\n`);
+          process.stderr.write(`${NAME}: the page needs a person, finish it on the window at ${page.url}\n`);
           await write("login");
         },
         signedIn: (state) => keepAuth(store, options.session, state),
@@ -529,13 +530,19 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const early = blocksBeforeActing(decision, observation);
       const stalled = early ?? stalledOn(decision, observation.url, clicked);
       if (stalled !== null) {
-        if (!options.handoff || !loginPage(observation)) {
-          if (early === null && decision.operation === "TYPE_TEXT") cause = "no_value";
+        const here: Cause = early === null && decision.operation === "TYPE_TEXT" ? "no_value" : null;
+        const { kind } = blockerOf(stalled, decision, here);
+        // A sign-in with a saved auth profile needs nobody; a captcha, or a page Jev cannot name, needs a person now.
+        // Every other blocker ends the run for `resume`, which needs no window and no one watching it.
+        const profile = options.handoff && kind === "sign_in" ? await authProfileFor(deps.browser, observation.url) : null;
+        const window = options.handoff && options.display === true && (kind === "captcha" || kind === "unknown");
+        if (profile === null && !window) {
+          cause = here;
           reason = step.reason = stalled;
           await write("running", step);
           break;
         }
-        if (!(await login(observation, step))) break;
+        if (!(await login(observation, step, profile))) break;
         history.push(step);
         await write("running", step);
         continue;

@@ -5,7 +5,8 @@ import { isAbsolute, join } from "node:path";
 import { run } from "../dist/run.js";
 import { newRunDir } from "../dist/session.js";
 import { activeScope } from "../dist/scope.js";
-import { isolatedScopes, lines, pages, replay, replayingJev, SAVED_STATE, scriptedBrowser } from "./helpers.mjs";
+import { choiceAnswer, isolatedScopes, lab, lines, pages, replay, replayingJev, SAVED_STATE, scriptedBrowser, scriptedJev } from "./helpers.mjs";
+import { BLOCKER_KINDS } from "../dist/questions.js";
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
 
@@ -507,13 +508,12 @@ function polls(browser) {
 }
 
 test("a login page the goal cannot fill is handed to a window, and the run goes on signed in", async (t) => {
-  const { result, browser, jev, out } = await drive("handoff", null, {}, signsIn([0, 3]));
+  const { result, browser, jev, out } = await drive("handoff", null, { display: true }, signsIn([0, 3]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "done");
   assert.equal(result.url, SETTINGS);
   assert.deepEqual(acts(browser), [
-    "auth list",
     "close",
     HEADED,
     "wait --load networkidle",
@@ -538,7 +538,7 @@ test("a login page the goal cannot fill is handed to a window, and the run goes 
 });
 
 test("after the window closes the run goes on headless, signed in, on the page where the person landed", async (t) => {
-  const { result, browser, out } = await drive("handoff", null, {}, signsIn([0, 3]));
+  const { result, browser, out } = await drive("handoff", null, { display: true }, signsIn([0, 3]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(browser.state.blank, false, "no command after the window landed on a fresh browser");
@@ -550,7 +550,7 @@ test("after the window closes the run goes on headless, signed in, on the page w
 });
 
 test("status.json reads login with the page while the window is open", async (t) => {
-  const run_options = options("open the settings page");
+  const run_options = options("open the settings page", { display: true });
   t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
   const browser = scriptedBrowser(pages("login"), signsIn([0, 3]));
   const served = browser.run.bind(browser);
@@ -593,9 +593,11 @@ test("a saved auth profile for the page signs in without a window, and the step 
     return data;
   };
 
+  const responses = replay("handoff");
+  responses[0].answers.blocker_kind = choiceAnswer(Object.keys(BLOCKER_KINDS), "sign_in");
   const result = await run(run_options, {
     browser,
-    jev: replayingJev(replay("handoff")),
+    jev: replayingJev(responses),
     policyJev: unaskedJev(),
     scopes: isolatedScopes(),
   });
@@ -607,21 +609,49 @@ test("a saved auth profile for the page signs in without a window, and the step 
   assert.equal(login.reason, "signed in with the auth profile acme");
 });
 
-test("a password field the goal has no value for takes the same road as a blocked login page", async (t) => {
-  const { result, browser, out } = await drive("handoff-password", null, {}, signsIn([3]));
-  t.after(() => rmSync(out, { recursive: true, force: true }));
+test("a sign-in the goal holds no password for ends blocked for resume, and opens no window even with a display (#104)", async (t) => {
+  const run_options = options("log in as alice@example.com with password secret", { display: true });
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const responses = replay("handoff-password");
+  responses[0].answers.blocker_kind = choiceAnswer(Object.keys(BLOCKER_KINDS), "sign_in");
+  const browser = scriptedBrowser(pages("login"));
+  const result = await run(run_options, { browser, jev: replayingJev(responses), policyJev: unaskedJev(), scopes: isolatedScopes() });
 
+  assert.equal(result.status, "blocked");
+  assert.equal(result.blocker.kind, "sign_in");
+  assert.deepEqual(acts(browser), ["auth list"], "the vault is asked, and no window opens");
+  assert.ok(!browser.state.calls.includes(HEADED));
+});
+
+test("a captcha opens the window when the run can show one, and the run goes on after it (#104)", async (t) => {
+  const [captcha, home] = lab("captcha", "home");
+  const run_options = options("open my invoices", { display: true });
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser([captcha, home], signsIn([1]));
+  const jev = scriptedJev([{ operation: "CLICK", target: "1", kind: "captcha" }, { operation: "DONE" }]);
+  const result = await run(run_options, { browser, jev, policyJev: unaskedJev(), scopes: isolatedScopes() });
+
+  assert.ok(browser.state.calls.some((call) => call.startsWith("open ") && call.endsWith("--headed")), "a window opened");
+  assert.ok(!acts(browser).includes("auth list"), "a captcha does not ask the vault");
+  assert.ok(!acts(browser).some((call) => call.startsWith("click")), "the run never ticks the box itself");
   assert.equal(result.status, "done");
-  assert.equal(acts(browser)[0], "auth list");
-  const [login] = steps(out);
-  assert.equal(login.operation, "TYPE_TEXT");
-  assert.equal(login.label, "Password");
-  assert.equal(login.value, "•••");
-  assert.equal(login.executed, true);
+});
+
+test("a captcha with no display ends the run blocked as captcha, with no window (#104)", async (t) => {
+  const [captcha] = lab("captcha");
+  const run_options = options("open my invoices");
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser([captcha]);
+  const jev = scriptedJev([{ operation: "CLICK", target: "1", kind: "captcha" }]);
+  const result = await run(run_options, { browser, jev, policyJev: unaskedJev(), scopes: isolatedScopes() });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.blocker.kind, "captcha");
+  assert.deepEqual(acts(browser), []);
 });
 
 test("an SSO page on the way is not taken for the app: the run waits until the person is back on an origin it knows", async (t) => {
-  const { result, browser, out } = await drive("handoff-sso", null, {}, signsIn([1, 2]));
+  const { result, browser, out } = await drive("handoff-sso", null, { display: true }, signsIn([1, 2]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "done");
@@ -631,13 +661,12 @@ test("an SSO page on the way is not taken for the app: the run waits until the p
 });
 
 test("a login nobody completes times out, goes back headless to the login page and ends the run blocked", async (t) => {
-  const { result, browser, out } = await drive("handoff", null, { loginTimeoutMs: 0 }, signsIn([]));
+  const { result, browser, out } = await drive("handoff", null, { loginTimeoutMs: 0, display: true }, signsIn([]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "blocked");
   assert.equal(result.reason, `the login on ${LOGIN} timed out after 0 s in the window`);
   assert.deepEqual(acts(browser), [
-    "auth list",
     "close",
     HEADED,
     "wait --load networkidle",
@@ -660,7 +689,7 @@ const AUTH = "sessions/jev-test/auth.json";
 
 test("a handoff saves the sign-in to the session's auth.json before the run goes on", async (t) => {
   const scopes = isolatedScopes();
-  const run_options = options("open the settings page", { out: newRunDir(scopes, "jev-test") });
+  const run_options = options("open the settings page", { out: newRunDir(scopes, "jev-test"), display: true });
   t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
   const browser = scriptedBrowser(pages("login"), signsIn([0, 3]));
   const served = browser.run.bind(browser);
@@ -676,7 +705,7 @@ test("a handoff saves the sign-in to the session's auth.json before the run goes
 
 test("a run after a signed-in run of the same session starts signed in, and logs no login step", async (t) => {
   const scopes = isolatedScopes();
-  const first = options("open the settings page", { out: newRunDir(scopes, "jev-test") });
+  const first = options("open the settings page", { out: newRunDir(scopes, "jev-test"), display: true });
   const second = options("open the settings page", { out: newRunDir(scopes, "jev-test"), url: LOGIN });
   t.after(() => [first, second].forEach(({ out }) => rmSync(out, { recursive: true, force: true })));
   await run(first, {
@@ -712,13 +741,12 @@ test("a session with no auth.json starts without a state load", async (t) => {
 
 test("a recorded run stops the recording for the window and records the rest to a second file", async (t) => {
   const record = "/tmp/jev-record/handoff.webm";
-  const { result, browser, out } = await drive("handoff", null, { record }, signsIn([0, 3]));
+  const { result, browser, out } = await drive("handoff", null, { record, display: true }, signsIn([0, 3]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   const second = "/tmp/jev-record/handoff-2.webm";
   assert.deepEqual(acts(browser), [
     `record start ${record} --cursor`,
-    "auth list",
     "record stop",
     "close",
     HEADED,

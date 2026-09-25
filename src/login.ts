@@ -1,6 +1,5 @@
 import { withStateFile } from "./auth.js";
 import type { Browser } from "./browser.js";
-import type { Observation } from "./observe.js";
 import { parseSnapshot, type Element } from "./snapshot.js";
 
 /** How long a run holds the window open for the person to sign in. */
@@ -9,11 +8,6 @@ const POLL_MS = 1000;
 
 function password(element: Element): boolean {
   return element.password === true;
-}
-
-/** A page that shows a password field is a login page. */
-export function loginPage(page: Observation): boolean {
-  return page.elements.some(password);
 }
 
 /** The same page under a different query or hash, so `/login?next=/billing` still matches a profile saved on `/login`. */

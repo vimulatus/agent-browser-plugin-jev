@@ -57,14 +57,20 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --fixtures <file>  Values a walk types into forms; overrides the built-in keys
   --record <file>    Record the run to this .webm or .mp4, cursor included
   --human            Move the pointer along a curve instead of jumping
-  --no-handoff       End blocked at a login page instead of opening a window for it
-  --login-timeout <s> Seconds to wait for the person to sign in; default ${LOGIN_TIMEOUT_MS / 1000}
+  --no-handoff       Neither sign in with a saved auth profile nor open a window
+  --login-timeout <s> Seconds to wait for the person on the window; default ${LOGIN_TIMEOUT_MS / 1000}
   --quiet            Print no line per step on stderr
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 `;
 
 export class UsageError extends Error {}
+
+/** Whether a window the run opens can be seen: a terminal a person sits at, and a display on Linux. CI has neither. */
+export function canShowWindow(env: NodeJS.ProcessEnv = process.env, tty = process.stdin.isTTY === true && process.stderr.isTTY === true): boolean {
+  if (!tty || env.CI !== undefined) return false;
+  return process.platform !== "linux" || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY);
+}
 
 export function allowFrom(value: string): RunOptions["allow"] {
   if (value === "all") return "all";
@@ -98,6 +104,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
     model: process.env.TYPESAFE_MODEL ?? DEFAULT_MODEL,
     human: false,
     handoff: true,
+    display: canShowWindow(),
     loginTimeoutMs: LOGIN_TIMEOUT_MS,
     progress: (line) => process.stderr.write(`${line}\n`),
   };

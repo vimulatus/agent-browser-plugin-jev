@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { allowFrom, loginTimeoutFrom, stepsFrom, UsageError } from "./args.js";
+import { allowFrom, canShowWindow, loginTimeoutFrom, stepsFrom, UsageError } from "./args.js";
 import type { Blocker } from "./blocker.js";
 import type { Allow } from "./decide.js";
 import { DEFAULT_MODEL } from "./jev.js";
@@ -146,6 +146,7 @@ export function resumeOptions(scopes: Scopes, args: ResumeArgs): RunOptions {
     model: typeof state.model === "string" ? state.model : DEFAULT_MODEL,
     human: args.human,
     handoff: args.handoff,
+    display: canShowWindow(),
     loginTimeoutMs: args.loginTimeoutMs,
     ...(args.record === undefined ? {} : { record: args.record }),
     ...(args.quiet ? {} : { progress: (line: string) => process.stderr.write(`${line}\n`) }),
