@@ -15,7 +15,7 @@ npm install -g soab
 
 This puts `soab` on PATH. It needs the `agent-browser` binary on PATH too. From a clone: `pnpm install && pnpm build && npm link`, and `pnpm build` again after a `git pull`.
 
-Export `TYPESAFE_API_KEY` in the shell that runs `soab`. A policy with no `judge` section needs no key. Behind a proxy that adds the key, as in a Claude Code cloud session, leave it unset: soab calls through `HTTPS_PROXY`.
+Export `TYPESAFE_API_KEY` in the shell that runs `soab`. A policy with no `judge` section needs no key.
 
 ## The three things it does
 

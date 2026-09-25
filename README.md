@@ -35,7 +35,7 @@ export TYPESAFE_API_KEY=...
 
 Export it in the shell that runs `soab`. A policy with no `judge` section asks Jev nothing and needs no key.
 
-Behind a proxy that adds the key itself, leave it unset. soab sends its calls through `HTTPS_PROXY`, minding `NO_PROXY`, and before it opens the browser it makes one call with no key and an empty body: a 401 or a 403 fails the run as a missing key does, and any other answer means the proxy supplied the key. With no key and no proxy, the run fails at once.
+soab calls Jev through `HTTPS_PROXY` when it is set, minding `NO_PROXY`.
 
 ## Scopes
 

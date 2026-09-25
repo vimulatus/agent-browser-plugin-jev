@@ -8,7 +8,7 @@ import type { Recent } from "./decide.js";
 import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
 import { loadFixtures } from "./fixtures.js";
 import { frontier, type Entry } from "./frontier.js";
-import { checkKey, httpJev, type Jev } from "./jev.js";
+import { httpJev, type Jev } from "./jev.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -78,9 +78,9 @@ export interface WalkDeps {
  * The replay runs on a session of its own, because a recording, the active tab and the refs of a snapshot all
  * belong to a session, and the walk is still using its own. It is always human-paced: the recording is evidence.
  */
-export async function defaultWalkDeps(options: WalkOptions): Promise<WalkDeps> {
-  await checkKey();
+export function defaultWalkDeps(options: WalkOptions): WalkDeps {
   const apiKey = process.env.TYPESAFE_API_KEY;
+  if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
   return {
     browser: openBrowser(options.session, options.human),
     repro: openBrowser(`${options.session}-repro`, true),
@@ -158,7 +158,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   let replayed: Browser | undefined;
   let recording = false;
   try {
-    const deps = injected ?? (await defaultWalkDeps(options));
+    const deps = injected ?? defaultWalkDeps(options);
     browser = deps.browser;
     await loadAuth(files.store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);

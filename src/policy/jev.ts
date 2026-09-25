@@ -1,5 +1,4 @@
-import { fetch, httpsProxy } from "../http.js";
-import { headers } from "../jev.js";
+import { fetch } from "../http.js";
 
 /** Text, or the JSON structure TypeSafe calls an entry: state, instructions and criteria all take one. */
 export type Entry = string | { [key: string]: unknown } | unknown[];
@@ -24,18 +23,16 @@ const ATTEMPTS = 3;
 const TIMEOUT = 25_000;
 const RETRY_STATUS = new Set([429, 503, 529]);
 
-/** Jev over the TypeSafe System One API. `TYPESAFE_API_KEY` is read for the call and never stored; behind a proxy it may be absent. */
+/** Jev over the TypeSafe System One API. `TYPESAFE_API_KEY` is read for the call and never stored. */
 export function typesafeJev(model = MODEL): Jev {
   return {
     async ask(state, questions) {
       const apiKey = process.env.TYPESAFE_API_KEY;
-      if (!apiKey && httpsProxy() === undefined) {
-        throw new Error("a policy with a judge section needs TYPESAFE_API_KEY in the environment");
-      }
+      if (!apiKey) throw new Error("a policy with a judge section needs TYPESAFE_API_KEY in the environment");
       for (let attempt = 0; ; attempt++) {
         const response = await fetch(ENDPOINT, {
           method: "POST",
-          headers: headers(apiKey),
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model, state, questions }),
           signal: AbortSignal.timeout(TIMEOUT),
         });

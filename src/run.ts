@@ -4,7 +4,7 @@ import { openBrowser, type Browser } from "./browser.js";
 import { openRun, StoreFull } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
-import { checkKey, DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
+import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { authProfileFor, handoff, loginPage } from "./login.js";
 import { NAME } from "./name.js";
 import { discoverScopes, type Scopes } from "./scope.js";
@@ -100,10 +100,10 @@ interface Step {
   model: string;
 }
 
-/** The real browser and the real model, from the session and `TYPESAFE_API_KEY` or a proxy that adds it. */
-export async function defaultDeps(options: RunOptions): Promise<Deps> {
-  await checkKey();
+/** The real browser and the real model, from the session and `TYPESAFE_API_KEY`. */
+export function defaultDeps(options: RunOptions): Deps {
   const apiKey = process.env.TYPESAFE_API_KEY;
+  if (apiKey === undefined || apiKey === "") throw new Error("TYPESAFE_API_KEY is not set");
   return {
     browser: openBrowser(options.session, options.human),
     jev: httpJev(apiKey),
@@ -265,7 +265,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   let recording = false;
   let stopRecording = async () => {};
   try {
-    const deps = injected ?? (await defaultDeps(options));
+    const deps = injected ?? defaultDeps(options);
     const jev = deps.jev;
     browser = deps.browser;
 

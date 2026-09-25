@@ -1,4 +1,4 @@
-import { fetch, httpsProxy } from "./http.js";
+import { fetch } from "./http.js";
 
 export const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 export const DEFAULT_MODEL = "jev-latest";
@@ -45,34 +45,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** The headers of a System One call. With no key there is no Authorization: a proxy in front of the API adds it. */
-export function headers(apiKey: string | undefined): Record<string, string> {
-  return apiKey ? { authorization: `Bearer ${apiKey}`, "content-type": "application/json" } : { "content-type": "application/json" };
-}
-
-type Post = (url: string, init: RequestInit) => Promise<Response>;
-
-/**
- * Throws before anything acts when no call can authenticate. A set key passes unchecked. With no key, only a proxy
- * can add one, so without `HTTPS_PROXY` it throws at once, and behind one it asks the API with an empty body:
- * 401 or 403 means the proxy added nothing; any other answer, such as 422 for the empty body, means it did.
- */
-export async function checkKey(env: NodeJS.ProcessEnv = process.env, post: Post = fetch, endpoint = ENDPOINT): Promise<void> {
-  if (env.TYPESAFE_API_KEY) return;
-  if (httpsProxy(env) === undefined) throw new Error("TYPESAFE_API_KEY is not set");
-  let response: Response;
-  try {
-    response = await post(endpoint, { method: "POST", headers: headers(undefined), body: "{}", signal: AbortSignal.timeout(25_000) });
-  } catch (cause) {
-    throw new Error("jev: connection failed, nothing acted", { cause });
-  }
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(`TYPESAFE_API_KEY is not set, and the API refused a call through HTTPS_PROXY with HTTP ${response.status}`);
-  }
-}
-
-/** Binds TypeSafe's System One endpoint to one API key, or to none behind a proxy that adds it. Nothing has acted when this throws. */
-export function httpJev(apiKey: string | undefined, endpoint = ENDPOINT): Jev {
+/** Binds TypeSafe's System One endpoint to one API key. Nothing has acted when this throws. */
+export function httpJev(apiKey: string, endpoint = ENDPOINT): Jev {
   return {
     async ask(request) {
       for (let attempt = 0; ; attempt++) {
@@ -80,7 +54,7 @@ export function httpJev(apiKey: string | undefined, endpoint = ENDPOINT): Jev {
         try {
           response = await fetch(endpoint, {
             method: "POST",
-            headers: headers(apiKey),
+            headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
             body: JSON.stringify(request),
           });
         } catch (cause) {
