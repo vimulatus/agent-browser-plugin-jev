@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentBrowser } from "../dist/agent-browser.js";
@@ -32,14 +32,22 @@ export function driven(fake, human = false) {
   return Object.assign(browser, fake);
 }
 
-/** An agent-browser that serves saved pages and moves to the next one when a decision acts. */
+/** What the fake agent-browser writes for `state save`: the cookies and storage of a signed-in session. */
+export const SAVED_STATE = '{"cookies":[{"name":"sid","value":"signed-in"}],"origins":[]}';
+
+/**
+ * An agent-browser that serves saved pages and moves to the next one when a decision acts. `state save <path>`
+ * writes `SAVED_STATE` to the path, and `state load <path>` keeps what it read in `state.loaded`.
+ */
 export function scriptedBrowser(states, advance, human = false) {
-  const state = { index: 0, calls: [] };
+  const state = { index: 0, calls: [], loaded: [] };
   const step = advance ?? ((args) => (ACTS.has(args[0]) ? state.index + 1 : state.index));
   return driven({
     state,
     async run(args) {
       state.calls.push(args.join(" "));
+      if (args[0] === "state" && args[1] === "save") writeFileSync(args[2], SAVED_STATE);
+      if (args[0] === "state" && args[1] === "load") state.loaded.push(readFileSync(args[2], "utf8"));
       state.index = Math.min(step(args, state), states.length - 1);
       const page = states[state.index];
       switch (args.join(" ")) {

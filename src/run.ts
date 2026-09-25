@@ -1,12 +1,13 @@
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
+import { loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { authProfileFor, handoff, loginPage } from "./login.js";
 import { NAME } from "./name.js";
-import { discoverScopes, type Scopes } from "./scope.js";
+import { activeScope, discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -71,7 +72,7 @@ export interface Deps {
   browser: Browser;
   jev: Jev;
   policyJev: PolicyJev;
-  /** Where `--policy` looks up a name; discovered from the working directory and home when absent. */
+  /** Where `--policy` looks up a name and the session keeps its sign-in; discovered from the working directory and home when absent. */
   scopes?: Scopes;
 }
 
@@ -140,9 +141,9 @@ function logged(decision: Decision): string | null {
  * The policy the run judges every step against, or null with no `--policy`. A HAR is recorded over a reload,
  * which a run that is driving the page cannot do, so a policy that collects one is refused here.
  */
-async function policyOf(options: RunOptions, scopes?: Scopes): Promise<Policy | null> {
+async function policyOf(options: RunOptions, scopes: Scopes): Promise<Policy | null> {
   if (options.policy === undefined) return null;
-  const policy = await loadPolicy(options.policy, scopes ?? discoverScopes());
+  const policy = await loadPolicy(options.policy, scopes);
   if (policy.collect.includes("har")) {
     throw new Error(
       `policy ${options.policy}: a HAR is recorded over a reload, which a goal run cannot do; judge one page with --max-steps 0`,
@@ -183,7 +184,9 @@ function recent(history: Step[]): Recent[] {
  */
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
   const elapsed = stopwatch();
-  const policy = await policyOf(options, injected?.scopes);
+  const scopes = injected?.scopes ?? discoverScopes();
+  const store = activeScope(scopes).store;
+  const policy = await policyOf(options, scopes);
   const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
@@ -234,6 +237,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     const jev = deps.jev;
     browser = deps.browser;
 
+    await loadAuth(store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
 
     /** Starts the recording on the file asked for, then on `<name>-2`, `<name>-3` after each handoff, which stops it. */
@@ -304,6 +308,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
           process.stderr.write(`${NAME}: sign in on the window at ${page.url}\n`);
           await write("login");
         },
+        signedIn: () => saveAuth(store, options.session, deps.browser),
       });
       if (landed === null) {
         reason = step.reason = `the login on ${page.url} timed out after ${options.loginTimeoutMs / 1000} s in the window`;
@@ -409,6 +414,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     }
 
     await stopRecording();
+    // A blocked run does not save: after a handoff it can be on the blank browser of #67, signed out.
+    if (status === "done") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
     await write(status);
     return {

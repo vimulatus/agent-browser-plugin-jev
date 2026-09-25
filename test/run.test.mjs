@@ -4,7 +4,8 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { run } from "../dist/run.js";
 import { newRunDir } from "../dist/session.js";
-import { isolatedScopes, lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
+import { activeScope } from "../dist/scope.js";
+import { isolatedScopes, lines, pages, replay, replayingJev, SAVED_STATE, scriptedBrowser } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
 
@@ -23,8 +24,13 @@ function options(goal, overrides = {}) {
   };
 }
 
+/** A call with the temp file of a `state save` or `state load` left out, since its name is random. */
+function unfiled(call) {
+  return call.replace(/^state (save|load) .*/, "state $1 <file>");
+}
+
 function acts(browser) {
-  return browser.state.calls.filter((call) => !READS.has(call));
+  return browser.state.calls.filter((call) => !READS.has(call)).map(unfiled);
 }
 
 function steps(out) {
@@ -69,7 +75,7 @@ test("a goal walk types from the goal, clicks through and lands done", async (t)
   assert.equal(result.url, "http://127.0.0.1:8765/settings.html");
   assert.equal(result.steps, 4);
   assert.equal(result.actions, 3);
-  assert.deepEqual(acts(browser), ["fill @e5 alice@example.com", "fill @e6 secret", "click @e4"]);
+  assert.deepEqual(acts(browser), ["fill @e5 alice@example.com", "fill @e6 secret", "click @e4", "state save <file>"]);
   assert.equal(jev.requests.length, 4, "one Jev request per step");
   assert.deepEqual(
     jev.requests[2].state.recent_actions.map((action) => action.operation),
@@ -131,7 +137,12 @@ test("a policy that collects a HAR is refused: a goal run cannot reload the page
   const run_options = options("log in", { policy: "perf" });
   t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
   await assert.rejects(
-    run(run_options, { browser: scriptedBrowser(pages("login")), jev: replayingJev([]), policyJev: unaskedJev() }),
+    run(run_options, {
+      browser: scriptedBrowser(pages("login")),
+      jev: replayingJev([]),
+      policyJev: unaskedJev(),
+      scopes: isolatedScopes(),
+    }),
     /policy perf: a HAR is recorded over a reload.*--max-steps 0/,
   );
 });
@@ -192,7 +203,7 @@ test("a page that moves between the decision and the act is re-decided, not exec
   });
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
-  assert.deepEqual(acts(browser), []);
+  assert.deepEqual(acts(browser), ["state save <file>"]);
   assert.equal(result.status, "done");
   assert.equal(result.steps, 2);
   const [stale] = steps(out);
@@ -246,6 +257,7 @@ test("--record wraps the run in a cursor recording and --human curves every clic
     "fill @e6 secret",
     "click @e4 --human",
     "record stop",
+    "state save <file>",
   ]);
   assert.equal(result.record, record);
   assert.equal(status(out).record, record);
@@ -262,6 +274,7 @@ test("--record without --human records the same run with an instant pointer", as
     "fill @e6 secret",
     "click @e4",
     "record stop",
+    "state save <file>",
   ]);
   assert.ok(!browser.state.calls.some((call) => call.includes("--human")));
 });
@@ -277,7 +290,10 @@ test("a run that throws ends failed in status.json and still stops the recording
   const run_options = options("log in", { record });
   t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
 
-  await assert.rejects(run(run_options, { browser, jev: replayingJev([]) }), /the browser session is gone/);
+  await assert.rejects(
+    run(run_options, { browser, jev: replayingJev([]), scopes: isolatedScopes() }),
+    /the browser session is gone/,
+  );
   assert.equal(status(run_options.out).status, "failed");
   assert.match(status(run_options.out).reason, /the browser session is gone/);
   assert.deepEqual(acts(browser), [`record start ${record} --cursor`, "record stop"]);
@@ -327,7 +343,7 @@ function signsIn(byPoll) {
 
 function polls(browser) {
   const { calls } = browser.state;
-  return calls.slice(calls.indexOf(HEADED) + 1, calls.lastIndexOf("close"));
+  return calls.slice(calls.indexOf(HEADED) + 1, calls.lastIndexOf("close")).map(unfiled);
 }
 
 test("a login page the goal cannot fill is handed to a window, and the run goes on signed in", async (t) => {
@@ -341,11 +357,13 @@ test("a login page the goal cannot fill is handed to a window, and the run goes 
     "close",
     HEADED,
     "wait --load networkidle",
+    "state save <file>",
     "close",
     `open ${SETTINGS} --restore jev-test`,
     "wait --load networkidle",
+    "state save <file>",
   ]);
-  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i"]);
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i", "state save <file>"]);
   const [login, done] = steps(out);
   assert.equal(login.operation, "BLOCKED");
   assert.equal(login.executed, true);
@@ -371,7 +389,12 @@ test("status.json reads login with the page while the window is open", async (t)
     return served(args);
   };
 
-  await run(run_options, { browser, jev: replayingJev(replay("handoff")), policyJev: unaskedJev() });
+  await run(run_options, {
+    browser,
+    jev: replayingJev(replay("handoff")),
+    policyJev: unaskedJev(),
+    scopes: isolatedScopes(),
+  });
   assert.equal(seen.length, 1);
   assert.equal(seen[0].status, "login");
   assert.equal(seen[0].url, LOGIN);
@@ -397,9 +420,14 @@ test("a saved auth profile for the page signs in without a window, and the step 
     return data;
   };
 
-  const result = await run(run_options, { browser, jev: replayingJev(replay("handoff")), policyJev: unaskedJev() });
+  const result = await run(run_options, {
+    browser,
+    jev: replayingJev(replay("handoff")),
+    policyJev: unaskedJev(),
+    scopes: isolatedScopes(),
+  });
   assert.equal(result.status, "done");
-  assert.deepEqual(acts(browser), ["auth list", "auth login acme"]);
+  assert.deepEqual(acts(browser), ["auth list", "auth login acme", "state save <file>"]);
   const [login] = steps(run_options.out);
   assert.equal(login.executed, true);
   assert.equal(login.value, "•••");
@@ -424,7 +452,7 @@ test("an SSO page on the way is not taken for the app: the run waits until the p
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "done");
-  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i"]);
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i", "state save <file>"]);
   assert.ok(acts(browser).includes(`open ${SETTINGS} --restore jev-test`));
   assert.ok(!acts(browser).some((call) => call.includes("accounts.example-sso.test")));
 });
@@ -444,6 +472,60 @@ test("a login nobody completes times out, closes the window and ends the run blo
   assert.equal(status(out).reason, result.reason);
 });
 
+const AUTH = "sessions/jev-test/auth.json";
+
+test("a handoff saves the sign-in to the session's auth.json before the run goes on", async (t) => {
+  const scopes = isolatedScopes();
+  const run_options = options("open the settings page", { out: newRunDir(scopes, "jev-test") });
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages("login"), signsIn([0, 3]));
+  const served = browser.run.bind(browser);
+  let stored;
+  browser.run = async (args) => {
+    if (args.join(" ") === `open ${SETTINGS} --restore jev-test`) stored = await activeScope(scopes).store.get(AUTH);
+    return served(args);
+  };
+
+  await run(run_options, { browser, jev: replayingJev(replay("handoff")), policyJev: unaskedJev(), scopes });
+  assert.equal(Buffer.from(stored).toString(), SAVED_STATE, "auth.json is in the store when the window closes");
+});
+
+test("a run after a signed-in run of the same session starts signed in, and logs no login step", async (t) => {
+  const scopes = isolatedScopes();
+  const first = options("open the settings page", { out: newRunDir(scopes, "jev-test") });
+  const second = options("open the settings page", { out: newRunDir(scopes, "jev-test"), url: LOGIN });
+  t.after(() => [first, second].forEach(({ out }) => rmSync(out, { recursive: true, force: true })));
+  await run(first, {
+    browser: scriptedBrowser(pages("login"), signsIn([0, 3])),
+    jev: replayingJev(replay("handoff")),
+    policyJev: unaskedJev(),
+    scopes,
+  });
+
+  const signedIn = (args, state) => (args[0] === "state" && args[1] === "load" ? 3 : state.index);
+  const browser = scriptedBrowser(pages("login"), signedIn);
+  const result = await run(second, {
+    browser,
+    jev: replayingJev(replay("handoff").slice(1)),
+    policyJev: unaskedJev(),
+    scopes,
+  });
+
+  assert.equal(result.status, "done");
+  assert.equal(result.url, SETTINGS);
+  assert.deepEqual(browser.state.loaded, [SAVED_STATE]);
+  assert.deepEqual(acts(browser), ["state load <file>", `open ${LOGIN}`, "state save <file>"]);
+  const logged = steps(second.out);
+  assert.deepEqual(logged.map((step) => step.operation), ["DONE"]);
+  assert.ok(!logged.some((step) => /signed in/.test(step.reason ?? "")));
+});
+
+test("a session with no auth.json starts without a state load", async (t) => {
+  const { browser, out } = await drive("login");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+  assert.ok(!acts(browser).includes("state load <file>"));
+});
+
 test("a recorded run stops the recording for the window and records the rest to a second file", async (t) => {
   const record = "/tmp/jev-record/handoff.webm";
   const { result, browser, out } = await drive("handoff", null, { record }, signsIn([0, 3]));
@@ -457,11 +539,13 @@ test("a recorded run stops the recording for the window and records the rest to 
     "close",
     HEADED,
     "wait --load networkidle",
+    "state save <file>",
     "close",
     `open ${SETTINGS} --restore jev-test`,
     "wait --load networkidle",
     `record start ${second} --cursor`,
     "record stop",
+    "state save <file>",
   ]);
   assert.equal(result.record, record);
   assert.deepEqual(result.recordings, [record, second]);
