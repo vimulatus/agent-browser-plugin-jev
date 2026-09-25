@@ -38,13 +38,27 @@ type Exec = (
 export function agentBrowserCli(session: string, human = false, exec: Exec = execFileAsync): Run {
   const sessionArgs = ["--session", session, "--json", ...(human ? ["--input-mode", "human"] : [])];
   return async (args) => {
-    const { stdout } = await exec("agent-browser", [...sessionArgs, ...args], { maxBuffer: 64 * 1024 * 1024 });
-    const reply = JSON.parse(stdout) as Reply;
-    if (!reply.success || reply.data === null) {
-      throw new Error(`agent-browser ${args.join(" ")}: ${reply.error ?? "no data"}`);
+    const failed = (reason: string) => new Error(`agent-browser ${args.join(" ")}: ${reason}`);
+    let stdout: string;
+    try {
+      ({ stdout } = await exec("agent-browser", [...sessionArgs, ...args], { maxBuffer: 64 * 1024 * 1024 }));
+    } catch (error) {
+      // A non-zero exit rejects with the output on the error, and the reason is agent-browser's reply, not Node's message.
+      const { stdout: out, stderr } = error as { stdout?: string; stderr?: string };
+      throw failed(replyOf(out)?.error ?? (stderr?.trim() || (error as Error).message));
     }
+    const reply = JSON.parse(stdout) as Reply;
+    if (!reply.success || reply.data === null) throw failed(reply.error ?? "no data");
     return reply.data;
   };
+}
+
+function replyOf(stdout: string | undefined): Reply | null {
+  try {
+    return JSON.parse(stdout ?? "") as Reply;
+  } catch {
+    return null;
+  }
 }
 
 /**
