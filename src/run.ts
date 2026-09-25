@@ -1,14 +1,19 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
-import { openRun, StoreFull } from "./cap.js";
+import { codeBoxes } from "./boxes.js";
+import { blockerOf, blocksBeforeActing, networkBlocker, type Blocker, type Cause } from "./blocker.js";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { openRun, StoreFull, type RunFiles } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { checkKey, DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
-import { authProfileFor, handoff, loginPage } from "./login.js";
+import { authProfileFor, handoff } from "./login.js";
 import { NAME } from "./name.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
+import type { Element } from "./snapshot.js";
 import {
   applyPolicy,
   judge,
@@ -21,6 +26,9 @@ import {
   type Policy,
   type Previous,
 } from "./policy/index.js";
+import { stepLine } from "./progress.js";
+import { STOP_FILE } from "./runs.js";
+import { MASK, Secrets } from "./secrets.js";
 import { valueSpans } from "./spans.js";
 import { stopwatch } from "./stopwatch.js";
 
@@ -30,8 +38,6 @@ export const DEFAULT_MAX_STEPS = 60;
  * it waits for the network to go quiet, so a tree unchanged after it is no more likely to change on the next one.
  */
 const STUCK = 3;
-/** What a run logs in place of a value it typed into a field that hides what it holds. */
-export const MASK = "•••";
 
 export interface RunOptions {
   goal: string;
@@ -45,16 +51,36 @@ export interface RunOptions {
   human: boolean;
   policy?: string;
   fixtures?: string;
-  /** Whether a login page the goal cannot fill is handed to the person in a window. Off, the run ends blocked there. */
+  /** Whether a blocked page may be signed in with a saved auth profile, or shown to the person in a window. */
   handoff: boolean;
+  /** The run can show a window: it has a display and a terminal. Without one, a captcha ends the run like any blocker. */
+  display?: boolean;
   loginTimeoutMs: number;
+  /** Where each step's line goes as it happens; the command sends it to stderr unless `--quiet`. */
+  progress?: (line: string) => void;
+  /** Aborted by Ctrl-C or SIGTERM: the run finishes the step it is on and ends `stopped`. */
+  signal?: AbortSignal;
+  /** Set by `resume`: the run goes on in the session's open browser, from the page the last run ended on. */
+  resume?: Resume;
+}
+
+/** What `resume` hands the run it starts: the run it goes on from, a link to open, and the values to type first. */
+export interface Resume {
+  from: string;
+  open?: string;
+  values: { label: string; value: string }[];
+}
+
+/** The allow list as `status.json` keeps it, so `resume` can read it back. */
+export function allowList(allow: Allow): string[] | "all" {
+  return allow === "all" ? "all" : [...allow];
 }
 
 /** What `<out>/status.json` reports while the run is in flight and once it has ended. `login` means a window is open for the person to sign in. */
-export type RunStatus = "running" | "login" | "done" | "blocked" | "failed";
+export type RunStatus = "running" | "login" | "done" | "blocked" | "stopped" | "failed";
 
 export interface RunResult {
-  status: "done" | "blocked";
+  status: "done" | "blocked" | "stopped";
   url: string;
   steps: number;
   actions: number;
@@ -67,6 +93,8 @@ export interface RunResult {
   /** Every file the recording went to: one, or one per stretch when a handoff split it. */
   recordings: string[];
   reason: string | null;
+  /** What stopped a blocked run, and the fields it needs; absent on any other status. */
+  blocker?: Blocker;
   durationMs: number;
 }
 
@@ -95,6 +123,7 @@ interface Step {
   valueProbabilities: Record<string, number>;
   destructive: Decision["destructive"];
   outcome: number | null;
+  blockerProbabilities: Record<string, number>;
   latencyMs: number;
   usage: Record<string, number>;
   model: string;
@@ -117,6 +146,13 @@ function stuck(history: Step[]): string | null {
   if (last.length < STUCK || !last.every((s) => s.pageChanged === false)) return null;
   if (last.every((s) => s.operation === "WAIT")) return `the page did not change after ${STUCK} WAITs in a row`;
   return `${STUCK} actions in a row left the page unchanged`;
+}
+
+/** Why the run must stop before its next step, or null: a signal in its own shell, or `soab stop` from another. */
+export function stopAsked(options: RunOptions): string | null {
+  if (options.signal?.aborted === true) return `stopped by ${String(options.signal.reason ?? "a signal")}`;
+  if (existsSync(join(options.out, STOP_FILE))) return `stopped by ${NAME} stop`;
+  return null;
 }
 
 /** Why an irreversible control may not be activated, or null when it may. Shared by the goal run and the walk. */
@@ -169,7 +205,15 @@ function notDone(decision: Decision, url: string, content: string, clicked: Clic
 }
 
 function logged(decision: Decision): string | null {
-  return decision.password && decision.value !== null ? MASK : decision.value;
+  return decision.secret && decision.value !== null ? MASK : decision.value;
+}
+
+/** Rewrites a JSON-lines file of the run through `secrets`, for the lines written before a secret was typed. */
+async function scrubLines(files: RunFiles, name: string, secrets: Secrets): Promise<void> {
+  const path = join(files.dir, name);
+  if (secrets.empty || !existsSync(path)) return;
+  const lines = (await readFile(path, "utf8")).split("\n").filter(Boolean);
+  await files.replace(name, lines.map((line) => `${JSON.stringify(secrets.scrub(JSON.parse(line)))}\n`).join(""));
 }
 
 /**
@@ -202,13 +246,18 @@ function recordingFile(record: string, stretch: number): string {
   return join(dirname(record), `${basename(record, ext)}-${stretch}${ext}`);
 }
 
-function recent(history: Step[]): Recent[] {
-  return history.map(({ operation, label, value, pageChanged }) => ({
-    operation,
-    target: label,
-    value,
-    pageChanged,
-  }));
+/**
+ * What Jev is told the run did. A code spread over single-character boxes is told as one TYPE per box, with the
+ * character each got, or the mask for a secret: told as the whole code typed into the first box, Jev sees one character
+ * there and types again.
+ */
+function recent(history: Step[], spread: WeakMap<Step, Element[]>): Recent[] {
+  return history.flatMap((step) => {
+    const { operation, label, value, pageChanged } = step;
+    const boxes = spread.get(step);
+    if (boxes === undefined || value === null) return [{ operation, target: label, value, pageChanged }];
+    return boxes.map((box, at) => ({ operation, target: box.label, value: value === MASK ? MASK : value[at], pageChanged }));
+  });
 }
 
 /**
@@ -226,26 +275,37 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
+  const spread = new WeakMap<Step, Element[]>();
   const findings: WalkFinding[] = [];
   const startedAt = new Date().toISOString();
   let observation: Observation | null = null;
   let status: RunResult["status"] = "blocked";
   let reason: string | null = `reached --max-steps ${options.maxSteps}`;
+  let blocker: Blocker | undefined;
   let steps = 0;
   const origins = new Set<string>();
   if (options.url !== undefined) origins.add(new URL(options.url).origin);
   const recordings: string[] = [];
+  const secrets = new Secrets();
 
   const write = async (state: RunStatus, step: Step | null = null) => {
     const last = state !== "running" && state !== "login";
-    if (step !== null) await files.append("inferred.jsonl", `${JSON.stringify(step)}\n`);
-    if (policy !== null) await files.writeJson("findings.json", summarize(findings), last);
-    await files.writeJson("status.json", {
+    if (step !== null) {
+      const logged = secrets.scrub(step);
+      await files.append("inferred.jsonl", `${JSON.stringify(logged)}\n`);
+      options.progress?.(stepLine(logged));
+    }
+    if (policy !== null) await files.writeJson("findings.json", secrets.scrub(summarize(findings)), last);
+    await files.writeJson("status.json", secrets.scrub({
       status: state,
       goal: options.goal,
       policy: options.policy ?? null,
+      session: options.session,
       url: observation?.url ?? null,
       steps,
+      maxSteps: options.maxSteps,
+      allow: allowList(options.allow),
+      ...(options.resume === undefined ? {} : { resumedFrom: options.resume.from }),
       actions: history.length,
       findings: findings.length,
       findingsFile,
@@ -254,10 +314,16 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       recordings,
       model: options.model,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
-    }, last);
+    }), last);
+  };
+  /** The lines written before a secret was typed hold it too, so a run that typed one rewrites them as it ends. */
+  const scrubEarlier = async () => {
+    await scrubLines(files, "inferred.jsonl", secrets);
+    await scrubLines(files, "observed.jsonl", secrets);
   };
   await write("running");
 
@@ -269,8 +335,13 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     const jev = deps.jev;
     browser = deps.browser;
 
-    await loadAuth(store, options.session, browser);
+    // A resumed run goes on in the browser the last run left open, which already holds its sign-in.
+    if (options.resume === undefined) await loadAuth(store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
+    if (options.resume?.open !== undefined) {
+      secrets.add(options.resume.open);
+      await browser.open(options.resume.open);
+    }
 
     /** Starts the recording on the file asked for, then on `<name>-2`, `<name>-3` after each handoff, which stops it. */
     const record = async () => {
@@ -307,7 +378,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const judged = await judgeFindings(rules, page, gathered, applied, deps.policyJev);
       const answered = [...inferences, ...judged.inferences];
       if (answered.length > 0) {
-        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`);
+        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(secrets.scrub(inference))).join("\n")}\n`);
       }
       for (const finding of judged.findings) {
         const candidate = findingAt(finding, page.url, step);
@@ -322,9 +393,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
      * the page, else by the person in a window. Either way the step is logged as a typed password, masked.
      * False when the wait for the person ran out, with the reason on the run.
      */
-    const login = async (page: Observation, step: Step): Promise<boolean> => {
+    const login = async (page: Observation, step: Step, profile: string | null): Promise<boolean> => {
       step.value = MASK;
-      const profile = await authProfileFor(deps.browser, page.url);
       if (profile !== null) {
         await deps.browser.signIn(profile);
         step.executed = true;
@@ -339,7 +409,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         timeoutMs: options.loginTimeoutMs,
         opened: async () => {
           // The run blocks its caller, so the caller learns of the window from stderr, not from status.json.
-          process.stderr.write(`${NAME}: sign in on the window at ${page.url}\n`);
+          process.stderr.write(`${NAME}: the page needs a person, finish it on the window at ${page.url}\n`);
           await write("login");
         },
         signedIn: (state) => keepAuth(store, options.session, state),
@@ -355,9 +425,59 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       return true;
     };
 
+    /** Types each value `resume` was given into the field of that label, as a step of its own. Every one is masked. */
+    const typeGiven = async (values: Resume["values"]) => {
+      if (values.length === 0) return;
+      const page = await observe(deps.browser);
+      for (const { label, value } of values) {
+        const field = page.elements.find((element) => element.label === label && element.operations.includes("TYPE_TEXT"));
+        if (field === undefined) throw new Error(`the page has no field "${label}" to type the value into`);
+        secrets.add(value, label);
+        const boxes = await codeBoxes(deps.browser, page.elements, field.ref, value);
+        if (boxes === null) await deps.browser.act({ operation: "TYPE_TEXT", ref: field.ref, value });
+        for (const [at, box] of (boxes ?? []).entries()) {
+          await deps.browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: value[at] });
+          secrets.add("", box.label);
+        }
+        steps++;
+        const step: Step = {
+          step: steps,
+          hash: page.hash,
+          operation: "TYPE_TEXT",
+          target: field.index,
+          label,
+          value: MASK,
+          executed: true,
+          reason: "given to resume",
+          pageChanged: null,
+          confidence: 1,
+          probabilities: {},
+          targetProbabilities: {},
+          valueProbabilities: {},
+          destructive: null,
+          outcome: null,
+          blockerProbabilities: {},
+          latencyMs: 0,
+          usage: {},
+          model: options.model,
+        };
+        history.push(step);
+        await write("running", step);
+      }
+    };
+    await typeGiven(options.resume?.values ?? []);
+
     let previous: Previous | undefined;
     let clicked: Clicked | null = null;
+    let decided: Decision | null = null;
+    let cause: Cause = null;
     while (steps < options.maxSteps) {
+      const stop = stopAsked(options);
+      if (stop !== null) {
+        status = "stopped";
+        reason = stop;
+        break;
+      }
       observation = await observe(browser);
       origins.add(new URL(observation.url).origin);
       const last = history.at(-1);
@@ -369,10 +489,16 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         reason = unchanged;
         break;
       }
-      await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
+      await files.append("observed.jsonl", `${JSON.stringify(secrets.scrub({ step: steps + 1, ...observation }))}\n`);
       const content = await readContent(browser);
       if (policy !== null) await inspect(policy, observation, content, previous, steps + 1);
       previous = undefined;
+      const failed = networkBlocker(observation);
+      if (failed !== null) {
+        blocker = failed;
+        reason = failed.reason;
+        break;
+      }
 
       const decision = await decide({
         jev,
@@ -381,9 +507,10 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         spans,
         observation,
         content,
-        recent: recent(history),
+        recent: recent(history, spread),
         allow: options.allow,
       });
+      decided = decision;
       steps++;
       const step: Step = {
         step: steps,
@@ -401,25 +528,35 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         valueProbabilities: decision.valueProbabilities,
         destructive: decision.destructive,
         outcome: decision.outcome,
+        blockerProbabilities: decision.blocker.probabilities,
         latencyMs: decision.latencyMs,
         usage: decision.usage,
         model: decision.model,
       };
 
-      const stalled = stalledOn(decision, observation.url, clicked);
+      const early = blocksBeforeActing(decision, observation);
+      const stalled = early ?? stalledOn(decision, observation.url, clicked);
       if (stalled !== null) {
-        if (!options.handoff || !loginPage(observation)) {
+        const here: Cause = early === null && decision.operation === "TYPE_TEXT" ? "no_value" : null;
+        const { kind } = blockerOf(stalled, decision, here);
+        // A sign-in with a saved auth profile needs nobody; a captcha, or a page Jev cannot name, needs a person now.
+        // Every other blocker ends the run for `resume`, which needs no window and no one watching it.
+        const profile = options.handoff && kind === "sign_in" ? await authProfileFor(deps.browser, observation.url) : null;
+        const window = options.handoff && options.display === true && (kind === "captcha" || kind === "unknown");
+        if (profile === null && !window) {
+          cause = here;
           reason = step.reason = stalled;
           await write("running", step);
           break;
         }
-        if (!(await login(observation, step))) break;
+        if (!(await login(observation, step, profile))) break;
         history.push(step);
         await write("running", step);
         continue;
       }
       const denied = refused(decision.destructive, options.allow);
       if (denied !== null) {
+        cause = "refused";
         reason = step.reason = `${denied}: did not click ${decision.label}`;
         await write("running", step);
         break;
@@ -438,13 +575,20 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       }
 
       try {
-        await browser.act(decision);
+        const boxes = decision.operation === "TYPE_TEXT" ? await codeBoxes(browser, observation.elements, decision.ref, decision.value) : null;
+        if (boxes === null) await browser.act(decision);
+        if (boxes !== null) spread.set(step, boxes);
+        for (const [at, box] of (boxes ?? []).entries()) {
+          await browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: decision.value![at] });
+          if (decision.secret) secrets.add("", box.label);
+        }
       } catch (error) {
         reason = step.reason = `${decision.operation} failed: ${(error as Error).message}`;
         await write("running", step);
         break;
       }
       step.executed = true;
+      if (decision.secret && decision.value !== null) secrets.add(decision.value, decision.label);
       previous = actedOn(decision, observation.hash);
       if (decision.operation === "CLICK") clicked = { label: decision.label, url: observation.url, content };
       history.push(step);
@@ -453,10 +597,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
 
     await stopRecording();
     // A blocked run does not save, so a login that timed out does not overwrite the session's last sign-in.
-    if (status === "done") await saveAuth(store, options.session, browser);
+    if (status === "done" || status === "stopped") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
+    if (status === "blocked") blocker ??= blockerOf(reason ?? "", decided, cause);
+    await scrubEarlier();
     await write(status);
-    return {
+    return secrets.scrub({
       status,
       url: observation.url,
       steps,
@@ -468,10 +614,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       record: options.record ?? null,
       recordings,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       durationMs: elapsed(),
-    };
+    } satisfies RunResult);
   } catch (error) {
     reason = (error as Error).message;
+    await scrubEarlier().catch(() => {});
     await stopRecording().catch(() => {});
     // The cap that failed the run can refuse its last status too, and the run still fails for the first reason.
     await write("failed").catch((refused: unknown) => {

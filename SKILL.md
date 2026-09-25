@@ -33,7 +33,7 @@ soab run --policy perf --max-steps 0
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open, stderr says `soab: sign in on the window at <url>` and `status.json` reads `status: "login"`: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A session's sign-in carries to its next run: the run saves it as `sessions/<session>/auth.json` once the person signs in on the window and when a run ends done, and a goal run or a walk of the session loads it before its first step, so reuse one `--session` per app and sign in once. A goal run does not apply `--policy`; use form 2 or form 3.
+The goal carries every value that gets typed: Jev writes no text. A sign-in the goal holds no password for ends the run blocked with `kind: "sign_in"`, unless a saved `agent-browser auth` profile for that page signs in: ask your person for the fields and `resume`. Only a captcha, or a page Jev cannot name, opens a window for the person, and only when the run has a terminal and a display; stderr then says `soab: the page needs a person, finish it on the window at <url>` and `status.json` reads `status: "login"`: tell the person to finish it there. The run closes the window once they are through and goes on headless. `--login-timeout` bounds the wait, and `--no-handoff` ends the run blocked instead of either. A session's sign-in carries to its next run: the run saves it as `sessions/<session>/auth.json` once the person signs in on the window and when a run ends done, and a goal run or a walk of the session loads it before its first step, so reuse one `--session` per app and sign in once. A goal run does not apply `--policy`; use form 2 or form 3. A password, a one-time code or a card number the run types is written as `•••` in every file and on stdout.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -47,8 +47,9 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--fixtures` | `<file>` | YAML values a walk types into forms; built-in keys are `email`, `password`, `name`, `phone`, `address` |
 | `--record` | `<file>` | Records to this `.webm` or `.mp4`, cursor included; needs ffmpeg |
 | `--human` | | Moves the pointer along a curve instead of jumping |
-| `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
-| `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+| `--no-handoff` | | Ends the run blocked instead of signing in with a saved auth profile or opening a window for a captcha |
+| `--login-timeout` | `<seconds>` | How long the window stays open for the person; default 300 |
+| `--quiet` | | Prints no line per step on stderr |
 
 ## Scopes
 
@@ -60,7 +61,9 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 
 `config.json` from the project merges over the global one. `${VAR}` in a string reads the environment; an unset one is an error that names it.
 
-A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
+`soab tail <session>` follows the session's newest run from another shell, printing each step as it lands until the run ends; `--json` prints the steps as JSON. `soab stop <session>` stops the session's running run from any shell, after the step it is on; Ctrl-C does the same in the run's own shell. The run ends `stopped`, keeps its sign-in, leaves the browser on the page, and exits 3.
+
+A run blocks until it ends and prints one JSON line on stdout. Each step prints one line on stderr as it happens, such as `step 5 · CLICK "Verify" · 0.96`; `--quiet` turns them off. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 
 ## Write a policy
 
@@ -95,9 +98,9 @@ report:
 
 Everything lands in `--out`, named in the result and in `status.json`. With no `--out`, each run of a session gets a new `sessions/<session>/runs/<timestamp>/` in `./.soab/` when the repo has one, else in `~/.soab/`; older runs of the session sit beside it until `store.maxBytes` in `config.json` (1 GiB by default) evicts the least recently used runs, then sign-ins.
 
-- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. Done means the page shows the goal's outcome; a run whose page did not move on after its last submit, such as a wrong code, ends blocked and its `reason` says so. So does a run that meets a destructive click not in `--allow`, at the first refusal, or whose page stays unchanged over three steps in a row, WAITs included. `recordings` names every file a `--record` went to: two when a login window split it.
+- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked, 3 when stopped. Done means the page shows the goal's outcome; a run whose page did not move on after its last submit, such as a wrong code, ends blocked and its `reason` says so. So does a run that meets a destructive click not in `--allow`, at the first refusal, or whose page stays unchanged over three steps in a row, WAITs included. `recordings` names every file a `--record` went to: two when a login window split it. A blocked run adds `blocker: { kind, fields, reason }`: `kind` is `otp`, `sign_in`, `approval`, `captcha`, `missing_value`, `permission`, `error_page`, `rate_limit` or `unknown`, and `fields` lists `{ ref, label }` for every input a code, sign-in or form step still needs, empty for the other kinds; after a wrong code it names the code field again. `rate_limit` adds `retryAfter` in seconds when the page sent one. Branch on `kind`: ask your person for the fields, a permission, or to deal with the page, then go on with `soab resume <session> --value "<label>=<value>"` (repeatable; a bare `--value <value>` fills the only field). `resume` goes on in the same open browser from the page the run blocked on, with its goal, `--allow` and the steps it had left; with no `--value` it just looks again, after a push approval or a 429 wait. After a `permission` block, `soab resume <session> --allow <verb>` makes the click it refused. After a magic-link `sign_in`, ask your person for the link and pass it as `--open <url>`. Prefer `--value-env "<label>=<VAR>"` or `--value-file "<label>=<path>"` for a code or a password, so it stays out of shell history. It prints one JSON line and exits like `run`.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
-- A walk prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` and writes `findings.json`; `findingsFile` is its absolute path. A goal run with `--policy` adds the same key.
+- A walk prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` and writes `findings.json`. A sign-in or a code step no fixture fills ends it `blocked` with `blocker`, exit 2, and `soab resume <session> --value ...` walks on from there with its frontier and findings kept; `findingsFile` is its absolute path. A goal run with `--policy` adds the same key.
 - `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so it says how long a run has been going.
 
 `findings.json` is `{ findings, summary }`. Read `summary` first: `{ title, severity, where }` per finding. Each entry of `findings` adds `step`, `evidence`, `repeats` (the later steps that saw the same thing), and, when the walk replayed it, `reproduced`, `repro` (each action with the screenshot of the page it produced), `recording`, `console` and `errors`. Write your report from those fields. Jev writes titles from templates and no prose.

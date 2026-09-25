@@ -87,7 +87,7 @@ soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock.
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped, see [Stop a run](#stop-a-run). `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -101,8 +101,9 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 | `--fixtures` | `<file>` | The values a walk types into forms; replaces a built-in key or adds one |
 | `--record` | `<file>` | Records the run to this `.webm` or `.mp4`, cursor included |
 | `--human` | | Moves the pointer along a curve instead of jumping to each target |
-| `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
-| `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+| `--no-handoff` | | Ends the run blocked instead of signing in with a saved auth profile or opening a window for a captcha |
+| `--login-timeout` | `<seconds>` | How long the window stays open for the person; default 300 |
+| `--quiet` | | Prints no line per step on stderr |
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, a Noul for whether the click is irreversible, and a Noul for whether the page shows the goal's outcome. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead. Spans whose words overlap, like `123456` and `one-time code 123456`, count as one value: the one Jev ranks first is typed when their probabilities sum to more than 0.5 and more than `NONE`.
 
@@ -110,16 +111,73 @@ Jev reads the page from its whole accessibility tree, cut at 6000 characters, so
 
 A run also ends `blocked` before its step budget in two other places. A click Jev judges irreversible, with its verb not in `--allow`, is refused, and the first refusal ends the run: `delete is destructive and not in --allow: did not click Delete`. Three steps in a row that leave the page unchanged end it too, WAITs included, because a WAIT already waits for the network to go quiet: `the page did not change after 3 WAITs in a row`, or `3 actions in a row left the page unchanged` when the three were not all WAITs. A step that changes the page starts the count again.
 
+A code split over single-character boxes gets one character per box. When the field Jev picked is the first of a row of adjacent fields with `maxlength` 1, one per character of the value, the run fills them in order, whether the page moves focus between them or not; `agent-browser get attr <ref> maxlength` reads each box. Any other field gets the value whole.
+
+A value typed into a field that takes a secret never lands in the run's files or on stdout. A password field is one, and every step that offers a field asks Jev a `field_is_secret` Noul: a one-time code, a PIN, a card number or a government ID over 0.5 is one too. The run then writes `•••` for that value wherever it would appear: the step's value, the goal in `status.json`, the value probabilities, the field's value in `observed.jsonl` and in the snapshot on stdout, and anywhere else as text when it is four characters or more. Lines written before the value was typed are rewritten as the run ends. The one leak this cannot close is the goal on your command line, in your shell history.
+
 A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count and add `findingsFile`, the absolute path of that file. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
+
+### When a run is blocked
+
+A blocked run's result, and its `status.json`, carry `blocker`, so an agent can tell a code step from a captcha from a 500 without reading the page:
+
+```json
+"blocker": { "kind": "otp", "fields": [{ "ref": "e25", "label": "Verification Code" }], "reason": "the goal holds no value for Verification Code" }
+```
+
+| `kind` | The page |
+|---|---|
+| `otp` | Asks for a one-time code |
+| `sign_in` | Asks the user to sign in: an email, a password, or a link sent by email |
+| `approval` | Waits for the user to approve on another device |
+| `captcha` | Asks the user to prove they are a person |
+| `missing_value` | Has a form that needs values the goal does not hold |
+| `permission` | Offers a click the run refused as destructive, not in `--allow` |
+| `error_page` | Shows a server error |
+| `rate_limit` | Says there were too many requests |
+| `unknown` | Stops the goal some other way, or Jev is unsure what stops it |
+
+`fields` lists every empty field on the page the goal holds no value for, with its ref and label, when the kind is `otp`, `sign_in` or `missing_value`; it is empty for the others. A code or a sign-in the page turned down, such as a wrong code, leaves no field empty, so `fields` names every field on the page, to be typed again. `reason` is the sentence the run has always given. A run that ends `done` or `failed` has no `blocker`.
+
+Some pages end the run before it acts, whatever operation Jev picked, because each act there counts as an attempt on a real app: a failed captcha, a resent email. When Jev judges the page a `captcha` or an `approval` over 0.5, or a `sign_in` with nothing typed and nothing in the goal to type, such as a magic-link page, the run ends blocked at that step with nothing clicked. A sign-in the goal can fill, such as an email-first login with the email in the goal, goes on.
+
+A server error or a rate limit is named from the network, before Jev is asked anything and before anything is clicked: when the page's own document request returned 5xx the run ends `error_page` with `the page returned HTTP 500`, and on 429 it ends `rate_limit`, adding `retryAfter`, the seconds of the response's `Retry-After` header when it sent one. A walk records a 5xx as a finding, as it always has, and goes on.
+
+The kind costs no extra call: every step's request asks Jev a `blocker_kind` Choice beside the operation, and `inferred.jsonl` logs its probabilities as `blockerProbabilities`. The run reads it only when it ends blocked. A refused click is `permission` without asking. A field the goal holds no value for is `missing_value`, unless Jev judges the page a code or a sign-in step. Otherwise the kind is Jev's pick when it is over 0.5, and `unknown` when Jev is unsure or judges that nothing stops the goal.
+
+### Resume a blocked run
+
+A blocked run leaves the session's browser open on the page it stopped at, so a second command goes on from there with what the blocker asked for:
+
+```bash
+soab run "sign in and open my invoices" --url https://app.example.com --session checkout
+# exits 2: {"status":"blocked","blocker":{"kind":"otp","fields":[{"ref":"e25","label":"Verification Code"}],...}}
+soab resume checkout --value "Verification Code=482913"
+# exits 0: {"status":"done",...}
+```
+
+`soab resume <session>` reads the session's last run, which must have ended `blocked` or `stopped`, and goes on in the same browser from the page it ended on: no `--url`, no sign-in loaded, no restart. It types each `--value "<label>=<value>"` into the field of that label, as `blocker.fields` names it; a bare `--value <value>` fills the only field when there is one. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 with a message that names the problem. With no `--value` it looks at the page again and goes on: that covers a push approval and a retry after a 429. `--allow <verbs>` adds to the last run's allow list, so after a `permission` block `soab resume checkout --allow delete` makes the click the run refused; the widened list is in the new run's `status.json` as `allow`. A magic-link sign-in has nothing to type, and the link opens in the person's own browser rather than the session's. `--open` fixes that: `soab resume checkout --open <link>` opens it in the session's browser first, then goes on with the goal. The link is masked like a value, in every file and on stdout. Then it runs the same loop as `run`, with the last run's goal, `--allow`, model and the steps it had left, and exits the same way: 0 done, 2 blocked, 3 stopped.
+
+A value on the command line lands in shell history and the process list, so two more flags take one from elsewhere: `--value-env "<label>=<VAR>"` reads the environment variable, and `--value-file "<label>=<path>"` reads the file, trimmed. Both take the bare form too. An unset variable or a missing file exits 1 and names it, without printing a value.
+
+| Flag | Value | What it does |
+|---|---|---|
+| `--value` | `"<label>=<value>"` or `<value>` | Types the value into the field of that label; bare, into the only field. Repeatable |
+| `--value-env` | `"<label>=<VAR>"` or `<VAR>` | The same, with the value read from the environment variable |
+| `--value-file` | `"<label>=<path>"` or `<path>` | The same, with the value read from the file, trimmed |
+| `--allow` | `<verbs>` | Adds to the last run's allow list |
+| `--open` | `<url>` | Opens this link in the session's browser before going on |
+
+Each value is logged as a step of its own, `given to resume`, and every value `resume` receives is masked in every file and on stdout, whatever the field. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. `--max-steps`, `--out`, `--quiet`, `--no-handoff`, `--login-timeout`, `--human` and `--record` work as they do for `run`.
 
 ### Signing in
 
-A run that cannot act on a page with a password field, because the goal holds no value for it or Jev sees no move, signs in instead of stopping. It tries two things, in this order:
+A blocked run ends for `resume`, which needs no window and nobody watching it: a sign-in the goal holds no password for ends `blocked` with `kind: "sign_in"` and the fields it needs, and the agent asks its person for them and goes on with `soab resume`. Two blockers go another way first:
 
-1. **The agent-browser auth vault.** `agent-browser auth list` names the saved profiles and their URLs. A profile saved on the page's origin and path, query aside, is used through `agent-browser auth login <name>`: agent-browser types the credentials, so Jev still writes no text. The step is logged with its value masked. Save one with `agent-browser auth save <name> --url <login url> --username <user> --password-stdin`.
-2. **A window for the person.** With no profile for the page, the run closes the headless browser and opens the same session in a window, with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and stderr says `soab: sign in on the window at <url>`, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the run saves the window's cookies and storage, the window closes, the session opens headless where they landed with that sign-in loaded, and the run goes on from the next step.
+1. **A sign-in with a saved auth profile.** On a `sign_in` block, `agent-browser auth list` names the saved profiles and their URLs. A profile saved on the page's origin and path, query aside, is used through `agent-browser auth login <name>`: agent-browser types the credentials, so Jev still writes no text. The step is logged with its value masked, and the run goes on. Save one with `agent-browser auth save <name> --url <login url> --username <user> --password-stdin`.
+2. **A captcha, or a page Jev cannot name, in a window for the person.** Only these need a person on the page itself, and only when the run can show a window: stdin is a terminal, `CI` is unset, and on Linux `DISPLAY` or `WAYLAND_DISPLAY` is set. Then the run closes the headless browser and opens the same session in a window, with `--headed`, on that page. `status.json` reads `{ "status": "login", "url": ... }`, and stderr says `soab: the page needs a person, finish it on the window at <url>`. The run polls the page every second until the person is on another URL, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the run saves the window's cookies and storage, the window closes, the session opens headless where they landed with that sign-in loaded, and the run goes on from the next step. Without a display, a captcha ends the run `blocked` like any other blocker.
 
-`--login-timeout` bounds the wait, 300 seconds by default. When it runs out, the window closes, the session goes back headless to the login page, and the run ends `blocked` with a reason that names it. `--no-handoff` keeps an unattended run out of both paths: it ends `blocked` at the login page with today's reason. A headed window needs a display: on a Linux host without one, agent-browser starts Xvfb, nobody sees the window, and the timeout ends the run.
+`--login-timeout` bounds the wait, 300 seconds by default. When it runs out, the window closes, the session goes back headless to the page, and the run ends `blocked` with a reason that names it. `--no-handoff` keeps a run out of both paths: it ends `blocked` on the page, and `resume` goes on from there.
 
 agent-browser 0.38.1 has no live switch between headed and headless, so each leg is a relaunch. Into the window the run carries nothing; back out, it carries the sign-in through a temp file: `state save` from the window, then `state load <file> --headed false` before the headless `open`. The `--headed false` matters: after a window closes, agent-browser 0.38.1 launches the next browser headed again unless the command names the mode, and the command after that relaunches it headless without what it loaded (#67). The run uses no `--restore`, so it writes nothing under `~/.agent-browser/sessions/`. A recorded run stops the recording before the window and starts it again after, on a second file (`login.webm`, then `login-2.webm`); `recordings` in the result and in `status.json` names every file. A page that shows its login form and its app on the same URL is not detected as signed in, and the wait runs out.
 
@@ -153,11 +211,13 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
+It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 2 when a sign-in or a code step blocked it, 3 when it was stopped. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
 The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+
+A field no fixture value fits is marked tried and listed in `unfilled.json`, and the walk goes on, except on a sign-in or a code step: when Jev judges the page `sign_in` or `otp` over 0.5, the walk ends `blocked`, exits 2, and carries `blocker` with every empty field on the page. `soab resume <session> --value "<label>=<value>"` goes on from there: it reloads the blocked walk's `frontier.json` and findings, types the values, marks those fields tried, and walks on from the page it blocked on with the steps it had left. Controls tried before the block are not tried again, the step numbers go on, and the findings from before and after the block land in one `findings.json`, with `steps.jsonl` copied over so a finding after the block replays from the steps before it.
 
 A policy that collects `har` cannot walk, because a HAR is recorded over a reload of the page. Judge one page with `--max-steps 0` instead.
 
@@ -270,14 +330,31 @@ report:
 
 An agent runs `soab` like any other command and reads one JSON line from stdout when it ends. A run blocks until it is done, blocked or failed, so an agent that wants to go on meanwhile starts it in the background.
 
-Two lines go to stderr while the run is in flight:
+These lines go to stderr while the run is in flight; stdout stays the one JSON line:
 
 | Line | When |
 |---|---|
 | `soab: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
-| `soab: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
+| `step 4 · TYPE "Verification Code" ← ••• · 0.90` | After each step of a goal run or a walk: the act, its target, the value through the same mask as the run's files, and Jev's confidence. `--quiet` turns these off |
+| `soab: the page needs a person, finish it on the window at <url>` | The run opened a window for a captcha or a page it cannot name. Tell the person to finish it there |
 
-`status` in `status.json` is `running`, `login`, `done`, `blocked` or `failed`.
+`status` in `status.json` is `running`, `login`, `done`, `blocked`, `stopped` or `failed`.
+
+### Follow a run from another shell
+
+```bash
+soab tail checkout
+```
+
+It finds the session's newest run and prints its steps as they land, each in the form the run prints on stderr, until the run's `status.json` leaves `running`; then it exits 0. A run that has already ended prints its steps and exits. `--json` prints each step as the JSON object `inferred.jsonl` (a walk's `steps.jsonl`) holds, one per line, with secrets already masked. A session with no runs exits 1.
+
+### Stop a run
+
+```bash
+soab stop checkout
+```
+
+It asks the session's running run to stop, from any shell, through a `stop` file in the run's directory, and prints `{ session, out, stopping }`. Ctrl-C and SIGTERM do the same in the run's own shell; a second Ctrl-C exits at once. The run finishes the step it is on, saves the session's sign-in to `auth.json`, writes `status: "stopped"` with the step it reached, prints its one JSON line and exits 3. The browser stays open on the page, so `soab run --session checkout` with no `--url`, or `soab resume checkout`, goes on from there. `stop` on a session with no running run says so on stderr, prints `stopping: false`, and exits 0.
 
 ## What a run writes
 
@@ -348,8 +425,10 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 | A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
 | A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
 | A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. `--input-mode human`, `record start --cursor` and `click --human` were checked against agent-browser 0.38.1 without Jev, and gave a playable VP8 `.webm` with a cursor that eases between targets |
-| A login handed to a window | `run "open the settings page" --url <a login page>`, then sign in on the window | No. The handoff itself ran against agent-browser 0.38.1 without Jev, on a local page that sets a cookie and a localStorage key, with a script in the person's place opening the signed-in page on the window's session: `close`, `open <url> --headed`, the poll saw them land, `state save`, `close`, `state load <file> --headed false`, `open <landed>`, and every command after that reused the one headless browser, on the landed page with the cookie and the key (#67). Earlier, the first read after a relaunch threw `SecurityError` until a `wait --load` ran first. The poll has not run against a real login page, and no person has signed in on the window |
+| A page handed to a window | `run "open my invoices" --url <a captcha page>` from a terminal with a display, then finish it on the window | No. The handoff itself ran against agent-browser 0.38.1 without Jev, on a local page that sets a cookie and a localStorage key, with a script in the person's place opening the signed-in page on the window's session: `close`, `open <url> --headed`, the poll saw them land, `state save`, `close`, `state load <file> --headed false`, `open <landed>`, and every command after that reused the one headless browser, on the landed page with the cookie and the key (#67). Earlier, the first read after a relaunch threw `SecurityError` until a `wait --load` ran first. The poll has not run against a real login page, and no person has signed in on the window |
 | A sign-in carries to the next run | a goal run that signs in on a real login page, then a second run of the same `--session` | No. `state save` from a signed-in browser, then `state load` before the first `open` of a fresh session, were checked against agent-browser 0.38.1 without Jev, and carried a cookie and a localStorage key. No safe real login page was at hand, and a run with Jev in the loop needs a paid key |
+| A code over six boxes | `run "enter the code 123456 and verify" --url .../otp-no-advance.html` | Yes. One TYPE spread over the six boxes, a click on Verify, `status: "done"` on `/home.html`. The first try blocked on box 2 until Jev was told each box got its own character |
+| Resume after a code step | `run "sign in to Acme" --url .../otp-single.html`, then `resume <session> --value 123456` | Yes. The run blocks as `otp` naming `One-time code`; a wrong code blocks as `otp` again, naming the same field; the right one lands `done` on `/home.html`. Neither code is in any run file or on stdout |
 
 The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
 

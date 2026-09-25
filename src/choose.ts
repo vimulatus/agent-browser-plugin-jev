@@ -2,7 +2,15 @@ import { describe, THRESHOLD, type Allow, type Recent } from "./decide.js";
 import type { Entry } from "./frontier.js";
 import { choiceOf, noulOf, type Jev, type Question, type Request } from "./jev.js";
 import type { Observation } from "./observe.js";
-import { FIXTURE_VALUE, NEXT_ELEMENT, VERBS, WALK_DESTRUCTIVE, WALK_DESTRUCTIVE_VERB } from "./questions.js";
+import {
+  BLOCKER_KINDS,
+  FIXTURE_VALUE,
+  NEXT_ELEMENT,
+  VERBS,
+  WALK_BLOCKER_KIND,
+  WALK_DESTRUCTIVE,
+  WALK_DESTRUCTIVE_VERB,
+} from "./questions.js";
 import type { Element, Operation } from "./snapshot.js";
 import { NO_VALUE } from "./spans.js";
 
@@ -21,6 +29,8 @@ export interface Chosen {
   value: string | null;
   fixture: string | null;
   destructive: { probability: number; verb: string | null } | null;
+  /** On a field no fixture value fits, what Jev judges stops the walk there: a sign-in or a code step blocks it. */
+  blocker: { kind: string; probability: number } | null;
   probabilities: Record<string, number>;
   confidence: number | null;
   latencyMs: number;
@@ -79,6 +89,9 @@ export async function chooseNext(input: ChooseInput): Promise<Chosen> {
     };
   }
   for (const { element } of fillable) questions[`fixture_value_${element.index}`] = fixtureQuestion(fixtures);
+  if (fillable.length > 0) {
+    questions.blocker_kind = { type: "choice", criteria: { ...BLOCKER_KINDS }, instructions: { rules: WALK_BLOCKER_KIND } };
+  }
   const gated = allow !== "all" && activates;
   if (gated) {
     questions.action_is_destructive = {
@@ -117,6 +130,7 @@ export async function chooseNext(input: ChooseInput): Promise<Chosen> {
     value: operation === "SELECT" ? optionValue(taken.element) : null,
     fixture: null,
     destructive: null,
+    blocker: null,
     probabilities: picked?.probabilities ?? {},
     confidence: picked?.confidence ?? null,
     latencyMs,
@@ -129,6 +143,10 @@ export async function chooseNext(input: ChooseInput): Promise<Chosen> {
     const chose = value.choice !== NO_VALUE && value.probabilities[value.choice] > THRESHOLD;
     chosen.fixture = chose ? value.choice : null;
     chosen.value = chose ? fixtures[value.choice] : null;
+    if (!chose) {
+      const kind = choiceOf(answers, "blocker_kind", Object.keys(BLOCKER_KINDS));
+      chosen.blocker = { kind: kind.choice, probability: kind.probabilities[kind.choice] };
+    }
   } else if (gated) {
     const probability = noulOf(answers, "action_is_destructive");
     const verb = probability > THRESHOLD ? choiceOf(answers, "destructive_verb", Object.keys(VERBS)) : null;

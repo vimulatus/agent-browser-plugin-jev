@@ -166,6 +166,8 @@ export interface RunFiles {
    * for both copies only by evicting. The `last` write of the run may use the room it kept spare.
    */
   writeJson(name: string, value: unknown, last?: boolean): Promise<void>;
+  /** Replaces the file with `text`, whole, the way `writeJson` does. */
+  replace(name: string, text: string, last?: boolean): Promise<void>;
   append(name: string, value: string | Uint8Array): Promise<void>;
   /** Measures a file another process wrote into the run, such as a recording, whose size was not known up front. */
   admit(path: string): Promise<void>;
@@ -198,26 +200,28 @@ export function runFiles(dir: string, storeDir: string, store: Store, maxBytes: 
     await cappedStore.touch(runKey);
   };
 
+  const replace = async (name: string, text: string, last = false) => {
+    const path = join(dir, name);
+    const bytes = Buffer.byteLength(text);
+    const replaced = await sizeOf(path);
+    await reserve(Math.max(0, bytes - replaced), last);
+    const copy = Math.min(bytes, replaced);
+    if (runKey !== undefined && !(await cappedStore.reserveIfFree(copy, last))) {
+      await writeFile(path, text);
+      await cappedStore.release(Math.max(0, replaced - bytes));
+      return;
+    }
+    await mkdir(dir, { recursive: true });
+    await writeFile(`${path}.tmp`, text);
+    await rename(`${path}.tmp`, path);
+    if (runKey !== undefined) await cappedStore.release(replaced);
+  };
+
   return {
     dir,
     store: cappedStore,
-    async writeJson(name, value, last = false) {
-      const path = join(dir, name);
-      const text = `${JSON.stringify(value, null, 2)}\n`;
-      const bytes = Buffer.byteLength(text);
-      const replaced = await sizeOf(path);
-      await reserve(Math.max(0, bytes - replaced), last);
-      const copy = Math.min(bytes, replaced);
-      if (runKey !== undefined && !(await cappedStore.reserveIfFree(copy, last))) {
-        await writeFile(path, text);
-        await cappedStore.release(Math.max(0, replaced - bytes));
-        return;
-      }
-      await mkdir(dir, { recursive: true });
-      await writeFile(`${path}.tmp`, text);
-      await rename(`${path}.tmp`, path);
-      if (runKey !== undefined) await cappedStore.release(replaced);
-    },
+    replace,
+    writeJson: (name, value, last = false) => replace(name, `${JSON.stringify(value, null, 2)}\n`, last),
     async append(name, value) {
       await reserve(typeof value === "string" ? Buffer.byteLength(value) : value.byteLength);
       await mkdir(dir, { recursive: true });

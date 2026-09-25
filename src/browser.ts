@@ -36,6 +36,8 @@ export interface Request {
   resourceType: string;
   mimeType: string | null;
   timestamp: number;
+  /** The seconds a `Retry-After` response header asks to wait, when the response sent one. */
+  retryAfter?: number;
 }
 
 /** A saved login: the page it signs in on, and the name `signIn` takes. */
@@ -62,6 +64,8 @@ export interface Browser {
   requests(): Promise<Request[]>;
   /** Empties the console, the errors and the requests, so what comes after is read on its own. */
   clearLogs(): Promise<void>;
+  /** The `maxlength` of the element, or null when it sets none. */
+  maxLength(ref: string): Promise<number | null>;
   /** Runs one act. SCROLL and WAIT need no ref; BLOCKED and DONE are not acts, and throw. */
   act(act: Act): Promise<void>;
   screenshot(path: string): Promise<void>;

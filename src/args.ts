@@ -11,6 +11,10 @@ export const USAGE = `${NAME}
   ${NAME} run --policy <file> [options]
   ${NAME} init
   ${NAME} session reset <session>
+  ${NAME} stop <session>
+  ${NAME} resume <session> [--value "<label>=<value>"]... [--allow <verbs>] [--open <url>]
+                  [--value-env "<label>=<VAR>"]... [--value-file "<label>=<path>"]...
+  ${NAME} tail <session> [--json]
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
 to .gitignore. It is the project scope; ~/${STATE_DIR}/ is the global one.
@@ -20,8 +24,24 @@ its sign-in from the active scope and the sign-in agent-browser saved for it, th
 prints { session, deleted } as JSON. deleted lists what it removed, empty when the
 session had no state.
 
+resume goes on from the session's last run, blocked or stopped, in the same open
+browser: it types each --value into the field of that label that blocker.fields
+names (a bare --value fills the only one), then runs on with the goal, --allow
+and the steps left, widened by its own --allow. --open opens a sign-in link in
+the session's browser first, masked like a value. --value-env and --value-file
+take a value from an environment variable or a file, out of shell history. It prints one JSON line and exits
+like run. --max-steps, --out, --quiet, --no-handoff and --record work as for run.
+
+tail prints the steps of the session's newest run as they land, one line each
+as a run prints them on stderr, until it ends; --json prints each step as JSON.
+
+stop asks the session's running run to stop after the step it is on. Ctrl-C and
+SIGTERM do the same for a run in this shell. The run ends stopped, keeps its
+sign-in, leaves the browser open on the page, and exits 3.
+
 With a goal it drives the browser to it, one Jev request per step, and prints
-{ status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.
+{ status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked,
+3 when stopped.
 With a policy and no goal it walks the app from --url, trying every control
 once, and writes findings.json. --max-steps 0 judges the current page instead.
 
@@ -37,15 +57,22 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --fixtures <file>  Values a walk types into forms; overrides the built-in keys
   --record <file>    Record the run to this .webm or .mp4, cursor included
   --human            Move the pointer along a curve instead of jumping
-  --no-handoff       End blocked at a login page instead of opening a window for it
-  --login-timeout <s> Seconds to wait for the person to sign in; default ${LOGIN_TIMEOUT_MS / 1000}
+  --no-handoff       Neither sign in with a saved auth profile nor open a window
+  --login-timeout <s> Seconds to wait for the person on the window; default ${LOGIN_TIMEOUT_MS / 1000}
+  --quiet            Print no line per step on stderr
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 `;
 
 export class UsageError extends Error {}
 
-function allowFrom(value: string): RunOptions["allow"] {
+/** Whether a window the run opens can be seen: a terminal a person sits at, and a display on Linux. CI has neither. */
+export function canShowWindow(env: NodeJS.ProcessEnv = process.env, tty = process.stdin.isTTY === true && process.stderr.isTTY === true): boolean {
+  if (!tty || env.CI !== undefined) return false;
+  return process.platform !== "linux" || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY);
+}
+
+export function allowFrom(value: string): RunOptions["allow"] {
   if (value === "all") return "all";
   const verbs = value.split(",").map((verb) => verb.trim()).filter(Boolean);
   for (const verb of verbs) {
@@ -54,13 +81,13 @@ function allowFrom(value: string): RunOptions["allow"] {
   return new Set(verbs);
 }
 
-function stepsFrom(value: string): number {
+export function stepsFrom(value: string): number {
   const steps = Number(value);
   if (!Number.isInteger(steps) || steps < 0) throw new UsageError("--max-steps takes a whole number of steps");
   return steps;
 }
 
-function loginTimeoutFrom(value: string): number {
+export function loginTimeoutFrom(value: string): number {
   const seconds = Number(value);
   if (!Number.isFinite(seconds) || seconds < 0) throw new UsageError("--login-timeout takes a number of seconds");
   return seconds * 1000;
@@ -77,7 +104,9 @@ export function parseRunArgs(argv: string[]): RunOptions {
     model: process.env.TYPESAFE_MODEL ?? DEFAULT_MODEL,
     human: false,
     handoff: true,
+    display: canShowWindow(),
     loginTimeoutMs: LOGIN_TIMEOUT_MS,
+    progress: (line) => process.stderr.write(`${line}\n`),
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -92,6 +121,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
     }
     if (flag === "--no-handoff") {
       options.handoff = false;
+      continue;
+    }
+    if (flag === "--quiet") {
+      delete options.progress;
       continue;
     }
     const value = argv[++i];

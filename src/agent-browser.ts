@@ -16,6 +16,15 @@ interface Reply {
   error: string | null;
 }
 
+/** The seconds a `Retry-After` header asks for: a whole number of seconds, or an HTTP date from now. */
+export function retryAfterOf(headers: Record<string, string> | undefined, now = Date.now()): number | undefined {
+  const raw = Object.entries(headers ?? {}).find(([name]) => name.toLowerCase() === "retry-after")?.[1]?.trim();
+  if (raw === undefined || raw === "") return undefined;
+  if (/^\d+$/.test(raw)) return Number(raw);
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - now) / 1000));
+}
+
 type Exec = (
   file: string,
   args: string[],
@@ -89,20 +98,23 @@ export function agentBrowser(session: string, human = false, run: Run = agentBro
       return errors.map(({ text, url, line, column }) => ({ text, url, line, column }));
     },
     async requests() {
-      const { requests } = (await run(["network", "requests"])) as { requests: Request[] };
-      return requests.map(({ method, url, status, resourceType, mimeType, timestamp }) => ({
-        method,
-        url,
-        status,
-        resourceType,
-        mimeType,
-        timestamp,
-      }));
+      const { requests } = (await run(["network", "requests"])) as {
+        requests: (Request & { responseHeaders?: Record<string, string> })[];
+      };
+      return requests.map(({ method, url, status, resourceType, mimeType, timestamp, responseHeaders }) => {
+        const retryAfter = retryAfterOf(responseHeaders);
+        return { method, url, status, resourceType, mimeType, timestamp, ...(retryAfter === undefined ? {} : { retryAfter }) };
+      });
     },
     async clearLogs() {
       await call("console", "--clear");
       await call("errors", "--clear");
       await call("network", "requests", "--clear");
+    },
+    async maxLength(ref) {
+      const { value } = (await run(["get", "attr", `@${ref}`, "maxlength"])) as { value?: string | null };
+      const length = Number(value ?? Number.NaN);
+      return Number.isInteger(length) ? length : null;
     },
     act: async (act) => call(...commandFor(act, human)),
     screenshot: (path) => call("screenshot", path),
