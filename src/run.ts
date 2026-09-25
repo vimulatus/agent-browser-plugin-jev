@@ -13,6 +13,7 @@ import { authProfileFor, handoff } from "./login.js";
 import { NAME } from "./name.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
+import type { Element } from "./snapshot.js";
 import {
   applyPolicy,
   judge,
@@ -245,13 +246,18 @@ function recordingFile(record: string, stretch: number): string {
   return join(dirname(record), `${basename(record, ext)}-${stretch}${ext}`);
 }
 
-function recent(history: Step[]): Recent[] {
-  return history.map(({ operation, label, value, pageChanged }) => ({
-    operation,
-    target: label,
-    value,
-    pageChanged,
-  }));
+/**
+ * What Jev is told the run did. A code spread over single-character boxes is told as one TYPE per box, with the
+ * character each got, or the mask for a secret: told as the whole code typed into the first box, Jev sees one character
+ * there and types again.
+ */
+function recent(history: Step[], spread: WeakMap<Step, Element[]>): Recent[] {
+  return history.flatMap((step) => {
+    const { operation, label, value, pageChanged } = step;
+    const boxes = spread.get(step);
+    if (boxes === undefined || value === null) return [{ operation, target: label, value, pageChanged }];
+    return boxes.map((box, at) => ({ operation, target: box.label, value: value === MASK ? MASK : value[at], pageChanged }));
+  });
 }
 
 /**
@@ -269,6 +275,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
   const history: Step[] = [];
+  const spread = new WeakMap<Step, Element[]>();
   const findings: WalkFinding[] = [];
   const startedAt = new Date().toISOString();
   let observation: Observation | null = null;
@@ -500,7 +507,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         spans,
         observation,
         content,
-        recent: recent(history),
+        recent: recent(history, spread),
         allow: options.allow,
       });
       decided = decision;
@@ -570,6 +577,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       try {
         const boxes = decision.operation === "TYPE_TEXT" ? await codeBoxes(browser, observation.elements, decision.ref, decision.value) : null;
         if (boxes === null) await browser.act(decision);
+        if (boxes !== null) spread.set(step, boxes);
         for (const [at, box] of (boxes ?? []).entries()) {
           await browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: decision.value![at] });
           if (decision.secret) secrets.add("", box.label);

@@ -213,7 +213,7 @@ function boxesAdvance(args, state) {
 }
 
 test("a code over six boxes that do not move focus gets one character per box, then Verify (#100)", async (t) => {
-  const { result, acts, out } = await labRun(
+  const { result, acts, out, jev } = await labRun(
     t,
     ["otp-no-advance", "otp-no-advance-typed", "home"],
     [
@@ -235,6 +235,11 @@ test("a code over six boxes that do not move focus gets one character per box, t
     "state save <file>",
   ]);
   assert.equal(result.status, "done");
+  assert.deepEqual(
+    jev.requests[1].state.recent_actions.map(({ target, value }) => [target, value]),
+    [1, 2, 3, 4, 5, 6].map((digit) => [`Digit ${digit} of 6`, "•••"]),
+    "Jev is told each box was typed, not the whole code into the first",
+  );
   const observed = readFileSync(join(out, "observed.jsonl"), "utf8");
   assert.doesNotMatch(observed, /"value":"[1-6]"/, "each box's digit is masked");
 });
