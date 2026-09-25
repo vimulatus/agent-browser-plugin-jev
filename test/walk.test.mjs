@@ -580,3 +580,53 @@ test("a walk that meets a sign-in no fixture fills ends blocked, and resume goes
     assert.doesNotMatch(readFileSync(join(options.out, file), "utf8"), /hunter22|ada@example\.com/, `${file} holds a resume value`);
   }
 });
+
+/** A home page whose first link another element covers, and whose second leads to a page that logs an error. */
+const COVERED = [
+  { url: "http://127.0.0.1:8765/index.html", title: "Home", snapshot: '- link "Fork me on GitHub" [ref=e1]\n- link "Orders" [ref=e2]' },
+  {
+    url: "http://127.0.0.1:8765/orders.html",
+    title: "Orders",
+    snapshot: "",
+    console: [{ type: "error", text: "orders failed to load" }],
+  },
+];
+
+test("a click agent-browser refuses is recorded on its step, and the walk goes on to the next control (#109)", async (t) => {
+  const scopes = isolatedScopes();
+  const options = {
+    goal: "",
+    session: "lab",
+    maxSteps: 10,
+    out: newRunDir(scopes, "lab"),
+    url: COVERED[0].url,
+    allow: "all",
+    model: "jev-latest",
+    human: false,
+    policy: "errors",
+  };
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  const browser = walkBrowser(COVERED, { "0 click @e2": 1 });
+  const serve = browser.run;
+  browser.run = async (args) => {
+    if (args.join(" ") === "click @e1") throw new Error("agent-browser click @e1: Element '@e1' is covered by <div#content>");
+    return serve(args);
+  };
+  const result = await walk(options, {
+    browser,
+    repro: walkBrowser(COVERED, { "0 click @e2": 1 }, true),
+    jev: scriptedJev([{ target: "1" }, { target: "2" }]),
+    policyJev: silent,
+    scopes,
+  });
+
+  assert.equal(result.status, "done");
+  assert.match(result.reason, /every control the walk found has been tried/);
+  assert.deepEqual(json(options.out, "findings.json").findings.map((finding) => finding.title), [
+    "http://127.0.0.1:8765/orders.html logs orders failed to load",
+  ]);
+  const [refused] = lines(join(options.out, "steps.jsonl"));
+  assert.equal(refused.label, "Fork me on GitHub");
+  assert.equal(refused.executed, false);
+  assert.equal(refused.reason, "CLICK failed: agent-browser click @e1: Element '@e1' is covered by <div#content>");
+});

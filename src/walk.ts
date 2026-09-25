@@ -142,7 +142,8 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
 /**
  * Walks the app from the start page, trying every control it finds once. Every step applies the policy and
  * appends what it found to `findings.json`, deduped against the findings before it. The walk never leaves the
- * origin it started on, and stops when the frontier or `--max-steps` runs out.
+ * origin it started on, and stops when the frontier or `--max-steps` runs out. A control whose act fails is tried, and
+ * the walk goes on.
  */
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
   const elapsed = stopwatch();
@@ -428,14 +429,15 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         continue;
       }
 
+      // A control agent-browser refuses, one another element covers say, is tried; a browser that is gone fails the next observe.
+      chosen.entry.tried = true;
       try {
         await browser.act(chosen);
       } catch (error) {
-        reason = step.reason = `${chosen.operation} failed: ${(error as Error).message}`;
+        step.reason = `${chosen.operation} failed: ${(error as Error).message}`;
         await record();
-        break;
+        continue;
       }
-      chosen.entry.tried = true;
       step.executed = true;
       actions++;
       previous = { hash: observation.hash, action: { kind: chosen.operation, label: chosen.element.label } };
