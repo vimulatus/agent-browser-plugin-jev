@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>New invoice</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- Every field is required. A GST number is 15 characters, a PAN 10, a due date DD/MM/YYYY. -->
+<h1>New invoice</h1>
+<form id="invoice" novalidate>
+  <label for="customer">Customer name</label>
+  <input id="customer" type="text">
+  <label for="gst">GST number</label>
+  <input id="gst" type="text" placeholder="22AAAAA0000A1Z5">
+  <label for="pan">PAN</label>
+  <input id="pan" type="text" placeholder="AAAAA0000A">
+  <label for="due">Due date</label>
+  <input id="due" type="text" placeholder="DD/MM/YYYY">
+  <ul id="errors" class="error" role="alert"></ul>
+  <button type="submit">Save</button>
+</form>
+<p id="saved" role="status"></p>
+<script>
+  const fields = {
+    customer: [/\S/, "Customer name is required"],
+    gst: [/^[0-9A-Z]{15}$/, "GST number is required"],
+    pan: [/^[A-Z]{5}[0-9]{4}[A-Z]$/, "PAN is required"],
+    due: [/^\d{2}\/\d{2}\/\d{4}$/, "Due date is required"],
+  };
+  document.getElementById("invoice").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const missing = Object.entries(fields)
+      .filter(([id, [pattern]]) => !pattern.test(document.getElementById(id).value.trim()))
+      .map(([, [, message]]) => message);
+    document.getElementById("errors").innerHTML = missing.map((m) => `<li>${m}</li>`).join("");
+    if (missing.length === 0) document.getElementById("saved").textContent = "Invoice saved";
+  });
+</script>
+</body>
+</html>
