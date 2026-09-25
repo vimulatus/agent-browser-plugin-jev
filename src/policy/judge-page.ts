@@ -17,7 +17,7 @@ export interface JudgePageOptions {
   policyPath: string;
   out?: string;
   jev?: Jev;
-  /** Where the policy is looked up by name; discovered from the working directory and home when absent. */
+  /** Where the policy is looked up by name and where the run writes with no `out`; discovered from the working directory and home when absent. */
   scopes?: Scopes;
 }
 

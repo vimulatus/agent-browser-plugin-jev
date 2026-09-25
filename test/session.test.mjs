@@ -66,6 +66,7 @@ test("two goal runs of one session leave two run directories in the global scope
   assert.equal(first.status.out, first.out);
   assert.equal(second.status.out, second.out);
   assert.equal(first.status.status, "failed");
+  assert.match(first.status.reason, /TYPESAFE_API_KEY/);
 });
 
 test("a walk writes under its session in the project scope when there is one", () => {
@@ -74,6 +75,8 @@ test("a walk writes under its session in the project scope when there is one", (
   const { out, status } = runCommand(world_, "--policy", "errors", "--session", "checkout");
   assert.equal(dirname(out), join(world_.cwd, STATE_DIR, "sessions", "checkout", "runs"));
   assert.equal(status.out, out);
+  assert.equal(status.status, "failed");
+  assert.match(status.reason, /TYPESAFE_API_KEY/);
 });
 
 test("--out still names the run directory", () => {
