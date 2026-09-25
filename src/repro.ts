@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser } from "./browser.js";
+import type { RunFiles } from "./cap.js";
 import { pageHash } from "./hash.js";
 import { observe, type Observation } from "./observe.js";
 import type { Previous } from "./policy/index.js";
@@ -36,7 +37,8 @@ export interface ReproInput {
   browser: Browser;
   /** The walk's saved cookies and storage, loaded into the replay before it opens the start page. */
   state: string;
-  out: string;
+  /** The walk's run directory, which the evidence is written into and measured against the store's cap. */
+  files: RunFiles;
   /** The page the walk started on. The replay begins there, on a tab of its own. */
   home: string;
   /** Names the evidence: `<out>/evidence/<number>.webm` and one `<number>-<step>.png` per action. */
@@ -70,8 +72,8 @@ async function page(browser: Browser) {
  * quiet on the page the replay lands on, makes the finding a one-off: it is kept, unreproduced.
  */
 export async function reproduce(input: ReproInput): Promise<Reproduction> {
-  const { browser, number, fixtures } = input;
-  const evidence = join(input.out, "evidence");
+  const { browser, number, fixtures, files } = input;
+  const evidence = join(files.dir, "evidence");
   await mkdir(evidence, { recursive: true });
   const recording = join(evidence, `${number}.webm`);
 
@@ -97,6 +99,7 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
       await browser.wait("load");
       const screenshot = join(evidence, `${number}-${action.step}.png`);
       await browser.screenshot(screenshot);
+      await files.admit(screenshot);
       const url = await browser.url();
 
       replayed.push({ action: describe(action), url, screenshot });
@@ -115,5 +118,6 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
   } finally {
     await browser.stopRecording();
     await browser.closeTab();
+    await files.admit(recording);
   }
 }

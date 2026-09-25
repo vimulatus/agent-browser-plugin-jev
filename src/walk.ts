@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
+import { openRun, StoreFull } from "./cap.js";
 import { chooseNext, type Chosen } from "./choose.js";
 import { THRESHOLD, type Allow, type Recent } from "./decide.js";
 import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
@@ -23,7 +23,7 @@ import {
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
 import { MASK, type RunOptions, type RunStatus } from "./run.js";
-import { activeScope, discoverScopes, type Scopes } from "./scope.js";
+import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stopwatch } from "./stopwatch.js";
 /** A walk is a run with a policy and no goal. */
@@ -117,6 +117,7 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
   const elapsed = stopwatch();
   const scopes = injected?.scopes ?? discoverScopes();
+  const files = await openRun(scopes, options.out);
   const policy = await loadPolicy(options.policy, scopes);
   if (policy.collect.includes("har")) {
     throw new Error(
@@ -135,17 +136,12 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   let actions = 0;
   let reason = `reached --max-steps ${options.maxSteps}`;
 
-  await mkdir(options.out, { recursive: true });
-  const write = async (name: string, value: unknown) => {
-    const path = join(options.out, name);
-    await writeFile(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
-    await rename(`${path}.tmp`, path);
-  };
   const save = async (state: RunStatus) => {
-    await write("frontier.json", seen.entries());
-    await write("findings.json", summarize(findings));
-    await write("unfilled.json", unfilled);
-    await write("status.json", {
+    const last = state !== "running" && state !== "login";
+    await files.writeJson("frontier.json", seen.entries(), last);
+    await files.writeJson("findings.json", summarize(findings), last);
+    await files.writeJson("unfilled.json", unfilled, last);
+    await files.writeJson("status.json", {
       status: state,
       goal: null,
       policy: options.policy,
@@ -162,7 +158,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
-    });
+    }, last);
   };
   await save("running");
 
@@ -172,7 +168,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   try {
     const deps = injected ?? defaultWalkDeps(options);
     browser = deps.browser;
-    await loadAuth(activeScope(scopes).store, options.session, browser);
+    await loadAuth(files.store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
     if (options.record !== undefined) {
       await browser.record(options.record);
@@ -195,10 +191,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       const judged = await judgeFindings(policy, page, gathered, fired, deps.policyJev);
       const answered = [...inferences, ...judged.inferences];
       if (answered.length > 0) {
-        await appendFile(
-          join(options.out, "inferred.jsonl"),
-          `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`,
-        );
+        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`);
       }
       for (const finding of judged.findings) {
         const candidate = findingAt(finding, page.url, step);
@@ -211,13 +204,14 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         await save("running");
         const state = join(options.out, "state.json");
         await deps.browser.saveState(state);
+        await files.admit(state);
         replayed = deps.repro;
         Object.assign(
           candidate,
           await reproduce({
             browser: deps.repro,
             state,
-            out: options.out,
+            files,
             home: from,
             number: findings.length,
             actions: actionsBefore(options.out, candidate.step),
@@ -251,10 +245,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         acted.recent.pageChanged = observation.hash !== acted.hash;
         acted = null;
       }
-      await appendFile(
-        join(options.out, "observed.jsonl"),
-        `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
-      );
+      await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
 
       await inspect(observation, previous, steps + 1, home);
       previous = undefined;
@@ -306,7 +297,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         model: chosen.model,
       };
       const record = async () => {
-        await appendFile(join(options.out, "steps.jsonl"), `${JSON.stringify(step)}\n`);
+        await files.append("steps.jsonl", `${JSON.stringify(step)}\n`);
         await save("running");
       };
 
@@ -352,6 +343,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     if (recording) {
       await browser.stopRecording();
       recording = false;
+      await files.admit(options.record!);
     }
     if (replayed !== undefined) await replayed.close();
     observation ??= await observe(browser);
@@ -370,9 +362,15 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     };
   } catch (error) {
     reason = (error as Error).message;
-    if (recording && browser !== null) await browser.stopRecording().catch(() => {});
+    if (recording && browser !== null) {
+      await browser.stopRecording().catch(() => {});
+      await files.admit(options.record!).catch(() => {});
+    }
     if (replayed !== undefined) await replayed.close().catch(() => {});
-    await save("failed");
+    // The cap that failed the walk can refuse its last status too, and the walk still fails for the first reason.
+    await save("failed").catch((refused: unknown) => {
+      if (!(refused instanceof StoreFull)) throw refused;
+    });
     throw error;
   }
 }

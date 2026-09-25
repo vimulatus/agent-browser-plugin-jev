@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openBrowser } from "../browser.js";
+import { openRun } from "../cap.js";
 import { discoverScopes, type Scopes } from "../scope.js";
 import { newRunDir } from "../session.js";
 import { observe } from "../observe.js";
@@ -8,7 +8,7 @@ import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
 import { readContent } from "./content.js";
 import { recordHar } from "./har.js";
-import { judge, judgeFindings, type Inference } from "./judge.js";
+import { judge, judgeFindings } from "./judge.js";
 import { typesafeJev, type Jev } from "./jev.js";
 import { loadPolicy } from "./load.js";
 
@@ -42,8 +42,9 @@ export async function judgePage({ session, policyPath, out, jev = typesafeJev(),
   const judged = await judgeFindings(policy, observation, gathered, applied, jev);
   const answered = [...inferences, ...judged.inferences];
   if (answered.length === 0) return { findings: judged.findings, durationMs: elapsed() };
-  const inferred = writeInferred(answered, out ?? newRunDir(scopes, session));
-  return { findings: judged.findings, inferred, durationMs: elapsed() };
+  const files = await openRun(scopes, out ?? newRunDir(scopes, session));
+  await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`);
+  return { findings: judged.findings, inferred: join(files.dir, "inferred.jsonl"), durationMs: elapsed() };
 }
 
 /** The options when argv is `run --policy <file> --max-steps 0 [--session <name>] [--out <dir>]`, else null. */
@@ -60,11 +61,4 @@ export function judgePageOptions(argv: string[]): JudgePageOptions | null {
     policyPath,
     out: option("--out"),
   };
-}
-
-function writeInferred(inferences: Inference[], out: string): string {
-  mkdirSync(out, { recursive: true });
-  const path = join(out, "inferred.jsonl");
-  writeFileSync(path, inferences.map((inference) => JSON.stringify(inference)).join("\n") + "\n");
-  return path;
 }

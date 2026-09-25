@@ -19,10 +19,14 @@ export async function withStateFile<T>(use: (path: string) => Promise<T>): Promi
   }
 }
 
-/** Loads the session's saved sign-in into the browser, before its first open. A session with none loads nothing. */
+/**
+ * Loads the session's saved sign-in into the browser, before its first open, and records it as used, so eviction
+ * keeps it longest. A session with none loads nothing.
+ */
 export async function loadAuth(store: Store, session: string, browser: Browser): Promise<void> {
   const saved = await store.get(authKey(session));
   if (saved === null) return;
+  await store.touch(authKey(session));
   await withStateFile(async (path) => {
     await writeFile(path, saved);
     await browser.loadState(path);

@@ -1,13 +1,13 @@
-import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
+import { openRun, StoreFull } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { authProfileFor, handoff, loginPage } from "./login.js";
 import { NAME } from "./name.js";
-import { activeScope, discoverScopes, type Scopes } from "./scope.js";
+import { discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -185,7 +185,8 @@ function recent(history: Step[]): Recent[] {
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
   const elapsed = stopwatch();
   const scopes = injected?.scopes ?? discoverScopes();
-  const store = activeScope(scopes).store;
+  const files = await openRun(scopes, options.out);
+  const store = files.store;
   const policy = await policyOf(options, scopes);
   const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
@@ -200,16 +201,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   if (options.url !== undefined) origins.add(new URL(options.url).origin);
   const recordings: string[] = [];
 
-  await mkdir(options.out, { recursive: true });
-  const writeJson = async (name: string, value: unknown) => {
-    const path = join(options.out, name);
-    await writeFile(`${path}.tmp`, `${JSON.stringify(value, null, 2)}\n`);
-    await rename(`${path}.tmp`, path);
-  };
   const write = async (state: RunStatus, step: Step | null = null) => {
-    if (step !== null) await appendFile(join(options.out, "inferred.jsonl"), `${JSON.stringify(step)}\n`);
-    if (policy !== null) await writeJson("findings.json", summarize(findings));
-    await writeJson("status.json", {
+    const last = state !== "running" && state !== "login";
+    if (step !== null) await files.append("inferred.jsonl", `${JSON.stringify(step)}\n`);
+    if (policy !== null) await files.writeJson("findings.json", summarize(findings), last);
+    await files.writeJson("status.json", {
       status: state,
       goal: options.goal,
       policy: options.policy ?? null,
@@ -226,12 +222,13 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
-    });
+    }, last);
   };
   await write("running");
 
   let browser: Browser | null = null;
   let recording = false;
+  let stopRecording = async () => {};
   try {
     const deps = injected ?? defaultDeps(options);
     const jev = deps.jev;
@@ -248,10 +245,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       recordings.push(file);
       recording = true;
     };
-    const stopRecording = async () => {
+    /** A recording's size is known only once it stops, so it is measured against the cap then. */
+    stopRecording = async () => {
       if (!recording) return;
       await deps.browser.stopRecording();
       recording = false;
+      await files.admit(recordings.at(-1)!);
     };
     await record();
 
@@ -270,10 +269,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const judged = await judgeFindings(rules, page, gathered, applied, deps.policyJev);
       const answered = [...inferences, ...judged.inferences];
       if (answered.length > 0) {
-        await appendFile(
-          join(options.out, "inferred.jsonl"),
-          `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`,
-        );
+        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`);
       }
       for (const finding of judged.findings) {
         const candidate = findingAt(finding, page.url, step);
@@ -333,10 +329,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         reason = `${STUCK} actions in a row left the page unchanged`;
         break;
       }
-      await appendFile(
-        join(options.out, "observed.jsonl"),
-        `${JSON.stringify({ step: steps + 1, ...observation })}\n`,
-      );
+      await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
       if (policy !== null) await inspect(policy, observation, previous, steps + 1);
       previous = undefined;
 
@@ -434,8 +427,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     };
   } catch (error) {
     reason = (error as Error).message;
-    if (recording && browser !== null) await browser.stopRecording().catch(() => {});
-    await write("failed");
+    await stopRecording().catch(() => {});
+    // The cap that failed the run can refuse its last status too, and the run still fails for the first reason.
+    await write("failed").catch((refused: unknown) => {
+      if (!(refused instanceof StoreFull)) throw refused;
+    });
     throw error;
   }
 }
