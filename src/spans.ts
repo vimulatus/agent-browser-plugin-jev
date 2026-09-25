@@ -63,6 +63,7 @@ export function valueSpans(goal: string): string[] {
   return spans;
 }
 
+/** Whether `inner`'s words run unbroken inside `outer`'s. */
 function within(outer: string[], inner: string[]): boolean {
   for (let start = 0; start + inner.length <= outer.length; start++) {
     if (inner.every((word, i) => outer[start + i] === word)) return true;
@@ -71,10 +72,8 @@ function within(outer: string[], inner: string[]): boolean {
 }
 
 /**
- * Jev's answer to a value question, with spans that overlap counted as one value: the span Jev scored highest
- * takes the mass of every span whose words contain its words or sit inside them, so "one-time code 123456" and
- * "123456" cannot split the vote under the threshold. Jev's own ranking picks the text typed, which keeps a spaced
- * value like "Anna Smith" whole. The value is null when NONE outscores that merged mass.
+ * Reads Jev's answer to a value question: the span Jev ranked first, with the mass of every span it overlaps
+ * word for word. The value is null when NONE outscores that sum.
  */
 export function valueVote(probabilities: Record<string, number>): { value: string | null; probability: number } {
   const none = probabilities[NO_VALUE];
