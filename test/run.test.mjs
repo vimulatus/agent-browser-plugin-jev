@@ -30,7 +30,7 @@ function unfiled(call) {
 }
 
 function acts(browser) {
-  return browser.state.calls.filter((call) => !READS.has(call)).map(unfiled);
+  return browser.state.calls.filter((call) => !READS.has(call) && !call.startsWith("get attr ")).map(unfiled);
 }
 
 function steps(out) {
