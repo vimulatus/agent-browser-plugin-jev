@@ -181,11 +181,12 @@ test("a one-time code Jev judges secret appears in no run file and not on stdout
     [
       { operation: "TYPE_TEXT", target: "1", value: "482913", secret: 0.96 },
       { operation: "CLICK", target: "2" },
-      { operation: "DONE", outcome: 0.1 },
+      { operation: "DONE", outcome: 0.1, kind: "otp" },
     ],
     "sign in with the code 482913",
   );
   assert.equal(result.status, "blocked", "the page still shows the code step");
+  assert.deepEqual(result.blocker.fields, [{ ref: "e2", label: "One-time code" }], "a code turned down needs a new one");
   for (const file of ["status.json", "inferred.jsonl", "observed.jsonl"]) {
     assert.doesNotMatch(readFileSync(join(out, file), "utf8"), /482913/, `${file} holds the code`);
   }

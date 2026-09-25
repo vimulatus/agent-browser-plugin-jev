@@ -55,6 +55,8 @@ export interface Decision {
   blocker: { kind: string; probability: number; probabilities: Record<string, number> };
   /** Every empty field on the page no span of the goal belongs in; read only when the run blocks on a kind that needs values. */
   unfilled(): Field[];
+  /** Every field on the page the run can type into, filled or not. */
+  fields: Field[];
   confidence: number;
   probabilities: Record<string, number>;
   targetProbabilities: Record<string, number>;
@@ -254,6 +256,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
     outcome: operation === "DONE" ? noulOf(reply.answers, "goal_outcome_visible") : null,
     blocker: { kind: kind.choice, probability: kind.probabilities[kind.choice], probabilities: kind.probabilities },
     unfilled: () => unfilled(observation.elements, byOperation.get("TYPE_TEXT"), reply.answers, spans),
+    fields: observation.elements.filter((element) => element.operations.includes("TYPE_TEXT")).map(({ ref, label }) => ({ ref, label })),
     confidence: answer.confidence,
     probabilities: answer.probabilities,
     targetProbabilities: {},

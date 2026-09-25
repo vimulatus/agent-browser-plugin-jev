@@ -80,5 +80,7 @@ export function blockerOf(reason: string, decision: Decision | null, cause: Caus
   let kind: BlockerKind = judged ?? "unknown";
   if (cause === "no_value" && judged !== "otp" && judged !== "sign_in") kind = "missing_value";
   const fields = TAKES_VALUES.has(kind) && decision !== null ? decision.unfilled() : [];
+  // A code or a sign-in the page turned down leaves every field full, and each needs a new value from the person.
+  if (fields.length === 0 && decision !== null && (kind === "otp" || kind === "sign_in")) fields.push(...decision.fields);
   return { kind, fields, reason };
 }
