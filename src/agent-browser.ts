@@ -111,6 +111,11 @@ export function agentBrowser(session: string, human = false, run: Run = agentBro
       await call("errors", "--clear");
       await call("network", "requests", "--clear");
     },
+    async maxLength(ref) {
+      const { value } = (await run(["get", "attr", `@${ref}`, "maxlength"])) as { value?: string | null };
+      const length = Number(value ?? Number.NaN);
+      return Number.isInteger(length) ? length : null;
+    },
     act: async (act) => call(...commandFor(act, human)),
     screenshot: (path) => call("screenshot", path),
     record: (path) => call("record", "start", path, "--cursor"),

@@ -1,6 +1,7 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
+import { codeBoxes } from "./boxes.js";
 import { blockerOf, blocksBeforeActing, networkBlocker, type Blocker, type Cause } from "./blocker.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -495,7 +496,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       }
 
       try {
-        await browser.act(decision);
+        const boxes = decision.operation === "TYPE_TEXT" ? await codeBoxes(browser, observation.elements, decision.ref, decision.value) : null;
+        if (boxes === null) await browser.act(decision);
+        for (const [at, box] of (boxes ?? []).entries()) {
+          await browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: decision.value![at] });
+          if (decision.secret) secrets.add("", box.label);
+        }
       } catch (error) {
         reason = step.reason = `${decision.operation} failed: ${(error as Error).message}`;
         await write("running", step);

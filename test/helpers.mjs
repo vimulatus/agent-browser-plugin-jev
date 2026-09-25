@@ -103,6 +103,7 @@ export function scriptedBrowser(states, advance, human = false) {
       if (args[0] === "state" && args[1] === "load") state.loaded.push(readFileSync(args[2], "utf8"));
       state.index = Math.min(step(args, state), states.length - 1);
       const page = state.blank ? BLANK : states[state.index];
+      if (args[0] === "get" && args[1] === "attr") return { value: page.attrs?.[args[2].slice(1)]?.[args[3]] ?? null };
       switch (args.join(" ")) {
         case "snapshot -i":
           return { origin: page.url, snapshot: page.snapshot };
@@ -189,13 +190,14 @@ export function lines(path) {
 }
 
 const LAB_READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
+const LAB_READ = /^get attr /;
 
 /** Runs `goal` over lab pages by name, one scripted Jev intent per step, with a policy Jev that must never be asked. */
 export function labRun(t, names, intents, goal, overrides = {}) {
   return labRunPages(t, lab(...names), intents, goal, overrides);
 }
 
-export async function labRunPages(t, pages, intents, goal, { scopes = isolatedScopes(), jev: given, ...overrides } = {}) {
+export async function labRunPages(t, pages, intents, goal, { scopes = isolatedScopes(), jev: given, advance, ...overrides } = {}) {
   const options = {
     goal,
     session: "lab",
@@ -209,12 +211,12 @@ export async function labRunPages(t, pages, intents, goal, { scopes = isolatedSc
     ...overrides,
   };
   t.after(() => rmSync(options.out, { recursive: true, force: true }));
-  const browser = scriptedBrowser(pages);
+  const browser = scriptedBrowser(pages, advance);
   const jev = given ?? scriptedJev(intents);
   const policyJev = { ask: async () => assert.fail("no policy") };
   const result = await run(options, { browser, jev, policyJev, scopes });
   const status = JSON.parse(readFileSync(join(options.out, "status.json"), "utf8"));
-  const acts = browser.state.calls.filter((call) => !LAB_READS.has(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
+  const acts = browser.state.calls.filter((call) => !LAB_READS.has(call) && !LAB_READ.test(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
   return { result, status, jev, acts, browser, scopes, out: options.out };
 }
 

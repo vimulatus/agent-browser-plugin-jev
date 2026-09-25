@@ -100,5 +100,57 @@
     "title": "Home",
     "snapshot": "- heading \"Signed in\" [level=1, ref=e1]",
     "full": "- heading \"Signed in\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Welcome back. You are on the home page.\""
+  },
+  "otp-no-advance": {
+    "url": "http://127.0.0.1:8792/otp-no-advance.html",
+    "title": "Verify it's you",
+    "snapshot": "- heading \"Verify it's you\" [level=1, ref=e1]\n- textbox \"Digit 1 of 6\" [ref=e2]\n- textbox \"Digit 2 of 6\" [ref=e3]\n- textbox \"Digit 3 of 6\" [ref=e4]\n- textbox \"Digit 4 of 6\" [ref=e5]\n- textbox \"Digit 5 of 6\" [ref=e6]\n- textbox \"Digit 6 of 6\" [ref=e7]\n- button \"Verify\" [ref=e8]",
+    "full": "- heading \"Verify it's you\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Enter the 6-digit code we sent to your phone.\"\n- generic\n  - textbox \"Digit 1 of 6\" [ref=e2]\n  - textbox \"Digit 2 of 6\" [ref=e3]\n  - textbox \"Digit 3 of 6\" [ref=e4]\n  - textbox \"Digit 4 of 6\" [ref=e5]\n  - textbox \"Digit 5 of 6\" [ref=e6]\n  - textbox \"Digit 6 of 6\" [ref=e7]\n  - alert\n  - button \"Verify\" [ref=e8]",
+    "attrs": {
+      "e2": {
+        "maxlength": "1"
+      },
+      "e3": {
+        "maxlength": "1"
+      },
+      "e4": {
+        "maxlength": "1"
+      },
+      "e5": {
+        "maxlength": "1"
+      },
+      "e6": {
+        "maxlength": "1"
+      },
+      "e7": {
+        "maxlength": "1"
+      }
+    }
+  },
+  "otp-no-advance-typed": {
+    "url": "http://127.0.0.1:8792/otp-no-advance.html",
+    "title": "Verify it's you",
+    "snapshot": "- heading \"Verify it's you\" [level=1, ref=e1]\n- textbox \"Digit 1 of 6\" [ref=e2]: 1\n- textbox \"Digit 2 of 6\" [ref=e3]: 2\n- textbox \"Digit 3 of 6\" [ref=e4]: 3\n- textbox \"Digit 4 of 6\" [ref=e5]: 4\n- textbox \"Digit 5 of 6\" [ref=e6]: 5\n- textbox \"Digit 6 of 6\" [ref=e7]: 6\n- button \"Verify\" [ref=e8]",
+    "full": "- heading \"Verify it's you\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Enter the 6-digit code we sent to your phone.\"\n- generic\n  - textbox \"Digit 1 of 6\" [ref=e2]: 1\n  - textbox \"Digit 2 of 6\" [ref=e3]: 2\n  - textbox \"Digit 3 of 6\" [ref=e4]: 3\n  - textbox \"Digit 4 of 6\" [ref=e5]: 4\n  - textbox \"Digit 5 of 6\" [ref=e6]: 5\n  - textbox \"Digit 6 of 6\" [ref=e7]: 6\n  - alert\n  - button \"Verify\" [ref=e8]",
+    "attrs": {
+      "e2": {
+        "maxlength": "1"
+      },
+      "e3": {
+        "maxlength": "1"
+      },
+      "e4": {
+        "maxlength": "1"
+      },
+      "e5": {
+        "maxlength": "1"
+      },
+      "e6": {
+        "maxlength": "1"
+      },
+      "e7": {
+        "maxlength": "1"
+      }
+    }
   }
 }

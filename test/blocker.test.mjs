@@ -204,3 +204,48 @@ test("a code Jev judges an ordinary value is logged as typed", async (t) => {
   );
   assert.equal(lines(join(out, "inferred.jsonl"))[0].value, "482913");
 });
+
+/** The otp-no-advance page stays put while its boxes are filled, shows them full after the last, and moves on at Verify. */
+function boxesAdvance(args, state) {
+  if (args[0] === "fill" && args[1] === "@e7") return 1;
+  if (args[0] === "click") return 2;
+  return state.index;
+}
+
+test("a code over six boxes that do not move focus gets one character per box, then Verify (#100)", async (t) => {
+  const { result, acts, out } = await labRun(
+    t,
+    ["otp-no-advance", "otp-no-advance-typed", "home"],
+    [
+      { operation: "TYPE_TEXT", target: "1", value: "123456", secret: 0.95 },
+      { operation: "CLICK", target: "7" },
+      { operation: "DONE" },
+    ],
+    "enter the code 123456 and verify",
+    { advance: boxesAdvance },
+  );
+  assert.deepEqual(acts, [
+    "fill @e2 1",
+    "fill @e3 2",
+    "fill @e4 3",
+    "fill @e5 4",
+    "fill @e6 5",
+    "fill @e7 6",
+    "click @e8",
+    "state save <file>",
+  ]);
+  assert.equal(result.status, "done");
+  const observed = readFileSync(join(out, "observed.jsonl"), "utf8");
+  assert.doesNotMatch(observed, /"value":"[1-6]"/, "each box's digit is masked");
+});
+
+test("a value whose length differs from the box count is typed as it is (#100)", async (t) => {
+  const { acts } = await labRun(
+    t,
+    ["otp-no-advance", "otp-no-advance-typed"],
+    [{ operation: "TYPE_TEXT", target: "1", value: "12345" }, { operation: "BLOCKED" }],
+    "enter the code 12345 and verify",
+    { advance: boxesAdvance },
+  );
+  assert.deepEqual(acts, ["fill @e2 12345"]);
+});
