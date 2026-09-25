@@ -269,6 +269,14 @@ Everything lands in `--out`. When you name none, every run, the walk and `--max-
 
 A second run of the same session adds a directory beside the first, and the names sort in the order the runs started. `soab init` keeps `.soab/sessions/` out of git. The result and `status.json` both carry the path.
 
+To start a session clean:
+
+```bash
+soab session reset checkout
+```
+
+It closes the agent-browser session named `checkout`, so its browser holds no sign-in, then deletes `sessions/checkout/` from the active scope's store: every run and the saved `auth.json`. Other sessions, `checkout-repro` included, are left alone. It prints `{ session, deleted }` as JSON, where `deleted` is the directory it removed, or null when the session had nothing to delete; stderr says the same in words. It exits 0 either way.
+
 | File | What is in it |
 |---|---|
 | `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A goal run adds `recordings`. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
