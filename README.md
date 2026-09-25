@@ -1,25 +1,27 @@
-# Jev
+# soab
 
-A command that drives a browser for an agent. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
+`soab`, the system one agent browser, is a command that drives a browser for an agent. Give it one goal and it drives the browser there. Give it one policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action and answers every question in about 100 ms, so nothing thinks between the steps.
 
-Jev drives the browser through the [agent-browser](https://github.com/vercel-labs/agent-browser) binary on PATH. The rest of Jev sees the browser only through the `Browser` interface in `src/browser.ts`, so another driver, such as Playwright, plugs in at `openBrowser` without a change to the run, the walk or the policies.
+soab drives the browser through the [agent-browser](https://github.com/vercel-labs/agent-browser) binary on PATH. The rest of soab sees the browser only through the `Browser` interface in `src/browser.ts`, so another driver, such as Playwright, plugs in at `openBrowser` without a change to the run, the walk or the policies.
 
-The plan is [issue #1](https://github.com/vimulatus/agent-browser-plugin-jev/issues/1).
+The plan is [issue #1](https://github.com/vimulatus/soab/issues/1).
+
+The `agent-browser-plugin-jev` package on npm is deprecated in favour of `soab`.
 
 ## Install
 
 You need Node 20 or newer, the `agent-browser` binary on PATH, and a TypeSafe API key.
 
 ```bash
-npm install -g agent-browser-plugin-jev
-jev    # prints the usage
+npm install -g soab
+soab    # prints the usage
 ```
 
 From a clone instead:
 
 ```bash
-git clone https://github.com/vimulatus/agent-browser-plugin-jev
-cd agent-browser-plugin-jev
+git clone https://github.com/vimulatus/soab
+cd soab
 pnpm install && pnpm build && npm link
 ```
 
@@ -31,13 +33,13 @@ After a `git pull`, run `pnpm build` again. The linked command runs `dist/`, and
 export TYPESAFE_API_KEY=...
 ```
 
-Export it in the shell that runs `jev`. A policy with no `judge` section asks Jev nothing and needs no key.
+Export it in the shell that runs `soab`. A policy with no `judge` section asks Jev nothing and needs no key.
 
 ## Run a goal
 
 ```bash
-export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix jev)"
-jev run "log in as alice@example.com with password secret and open Settings" \
+export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix soab)"
+soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
@@ -67,7 +69,7 @@ A goal run with `--policy` judges every page it reaches, before each decision, a
 A run that cannot act on a page with a password field, because the goal holds no value for it or Jev sees no move, signs in instead of stopping. It tries two things, in this order:
 
 1. **The agent-browser auth vault.** `agent-browser auth list` names the saved profiles and their URLs. A profile saved on the page's origin and path, query aside, is used through `agent-browser auth login <name>`: agent-browser types the credentials, so Jev still writes no text. The step is logged with its value masked. Save one with `agent-browser auth save <name> --url <login url> --username <user> --password-stdin`.
-2. **A window for the person.** With no profile for the page, the run closes the headless browser and reopens the same session with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and stderr says `jev: sign in on the window at <url>`, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the window closes, the session reopens headless where they landed, with their cookies and storage restored, and the run goes on from the next step.
+2. **A window for the person.** With no profile for the page, the run closes the headless browser and reopens the same session with `--headed`, on the login page. `status.json` reads `{ "status": "login", "url": ... }`, and stderr says `soab: sign in on the window at <url>`, so the calling agent can tell the person to sign in. This is the path for SSO and 2FA. The run polls the page every second until the person is on a URL that is not the login page, on an origin the run has already been on, with no password field left; an SSO page on the way is not taken for the app. Then the window closes, the session reopens headless where they landed, with their cookies and storage restored, and the run goes on from the next step.
 
 `--login-timeout` bounds the wait, 300 seconds by default. When it runs out, the window closes and the run ends `blocked` with a reason that names the login page. `--no-handoff` keeps an unattended run out of both paths: it ends `blocked` at the login page with today's reason. A headed window needs a display: on a Linux host without one, agent-browser starts Xvfb, nobody sees the window, and the timeout ends the run.
 
@@ -76,7 +78,7 @@ agent-browser 0.38.1 has no live switch between headed and headless, so each leg
 ### Recording
 
 ```bash
-jev run "log in as alice@example.com with password secret and open Settings" \
+soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html --record ./login.webm --human
 ```
 
@@ -87,8 +89,8 @@ jev run "log in as alice@example.com with password secret and open Settings" \
 `--max-steps 0` observes the page the session is on, applies the policy once and moves nothing:
 
 ```bash
-agent-browser --session jev-check open http://127.0.0.1:8765/orders.html
-jev run --policy perf --max-steps 0 --session jev-check
+agent-browser --session soab-check open http://127.0.0.1:8765/orders.html
+soab run --policy perf --max-steps 0 --session soab-check
 ```
 
 It prints `{ findings, inferred, durationMs }`: the findings the rules raised, the path of the file holding every answer Jev gave, and how long the command took. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
@@ -98,7 +100,7 @@ It prints `{ findings, inferred, durationMs }`: the findings the rules raised, t
 With a policy and no goal, `run` walks the app on its own: it tries every control it finds once, applies the policy after every step, and writes down what it found.
 
 ```bash
-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
 It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
@@ -216,14 +218,14 @@ report:
 
 ## From an agent
 
-An agent runs `jev` like any other command and reads one JSON line from stdout when it ends. A run blocks until it is done, blocked or failed, so an agent that wants to go on meanwhile starts it in the background.
+An agent runs `soab` like any other command and reads one JSON line from stdout when it ends. A run blocks until it is done, blocked or failed, so an agent that wants to go on meanwhile starts it in the background.
 
 Two lines go to stderr while the run is in flight:
 
 | Line | When |
 |---|---|
-| `jev: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
-| `jev: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
+| `soab: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
+| `soab: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
 
 `status` in `status.json` is `running`, `login`, `done`, `blocked` or `failed`.
 
@@ -307,8 +309,8 @@ createServer(async (req, res) => {
 Both requests are slower than a second, so `latency` buckets both as `bad` and only Jev separates them:
 
 ```bash
-agent-browser --session jev-perf open http://127.0.0.1:8791/index.html
-jev run --policy perf --max-steps 0 --session jev-perf
+agent-browser --session soab-perf open http://127.0.0.1:8791/index.html
+soab run --policy perf --max-steps 0 --session soab-perf
 ```
 
 Expect one finding, `GET /api/products took 2501 ms`, and nothing about the beacon. The file at `inferred` says why: `/api/products` is `content_for_this_page`, the beacon is `analytics`.
