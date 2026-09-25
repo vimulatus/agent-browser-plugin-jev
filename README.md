@@ -102,7 +102,9 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
 
-One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, and a Noul for whether the click is irreversible. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
+One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, a Noul for whether the click is irreversible, and a Noul for whether the page shows the goal's outcome. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead.
+
+A run ends `done` only on a page that shows the goal's outcome: the page the goal names, a signed-in view, a confirmation, a saved value. Filled fields and a clicked submit are not the outcome. When Jev answers DONE but judges the outcome absent, or the last click left the page exactly as it was, the run ends `blocked` with a reason that says the page did not move on, such as `the page did not move on after clicking Verify: it does not show the goal's outcome`.
 
 A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count and add `findingsFile`, the absolute path of that file. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
 
