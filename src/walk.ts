@@ -3,8 +3,9 @@ import { join, resolve } from "node:path";
 import { loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { openRun, StoreFull } from "./cap.js";
-import { chooseNext, type Chosen } from "./choose.js";
-import type { Recent } from "./decide.js";
+import type { Blocker } from "./blocker.js";
+import { chooseNext, operationOf, type Chosen } from "./choose.js";
+import { THRESHOLD, type Recent } from "./decide.js";
 import { findingAt, sameAs, summarize, type WalkFinding } from "./findings.js";
 import { loadFixtures } from "./fixtures.js";
 import { frontier, type Entry } from "./frontier.js";
@@ -22,8 +23,8 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
-import { refused, stopAsked, type RunOptions, type RunStatus } from "./run.js";
-import { MASK } from "./secrets.js";
+import { allowList, refused, stopAsked, type RunOptions, type RunStatus } from "./run.js";
+import { MASK, Secrets } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stepLine } from "./progress.js";
@@ -53,7 +54,7 @@ export interface WalkStep {
 }
 
 export interface WalkResult {
-  status: "done" | "stopped";
+  status: "done" | "blocked" | "stopped";
   url: string;
   steps: number;
   actions: number;
@@ -63,8 +64,43 @@ export interface WalkResult {
   out: string;
   record: string | null;
   reason: string;
+  /** What stopped a blocked walk: a sign-in or a code step no fixture value fills. */
+  blocker?: Blocker;
   durationMs: number;
 }
+
+/** What a walk that resumes carries over from the one it goes on from: its frontier, its findings and its steps. */
+interface Carried {
+  entries: Entry[];
+  findings: WalkFinding[];
+  unfilled: { label: string; url: string }[];
+  steps: number;
+  actions: number;
+  home: string | null;
+  stepsLog: string;
+}
+
+function readJson<T>(dir: string, name: string, fallback: T): T {
+  const path = join(dir, name);
+  return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as T) : fallback;
+}
+
+function carriedFrom(dir: string): Carried {
+  const state = readJson<Record<string, unknown>>(dir, "status.json", {});
+  const stepsLog = join(dir, "steps.jsonl");
+  return {
+    entries: readJson<Entry[]>(dir, "frontier.json", []),
+    findings: readJson<{ findings: WalkFinding[] }>(dir, "findings.json", { findings: [] }).findings,
+    unfilled: readJson(dir, "unfilled.json", []),
+    steps: typeof state.steps === "number" ? state.steps : 0,
+    actions: typeof state.actions === "number" ? state.actions : 0,
+    home: typeof state.home === "string" ? state.home : null,
+    stepsLog: existsSync(stepsLog) ? readFileSync(stepsLog, "utf8") : "",
+  };
+}
+
+/** The kinds that stop a walk on a field no fixture fits: the walk cannot sign in or pass a code step on its own. */
+const WALK_BLOCKERS = new Set(["sign_in", "otp"]);
 
 /** What the walk drives: the browser, the session it replays findings on, and Jev for its own and the policy's questions. */
 export interface WalkDeps {
@@ -120,28 +156,39 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   }
   const fixtures = loadFixtures(options.fixtures);
   const findingsFile = resolve(options.out, "findings.json");
-  const seen = frontier();
-  const findings: WalkFinding[] = [];
-  const unfilled: { label: string; url: string }[] = [];
+  const carried = options.resume === undefined ? null : carriedFrom(options.resume.from);
+  const seen = frontier(carried?.entries);
+  const findings: WalkFinding[] = carried?.findings ?? [];
+  const unfilled: { label: string; url: string }[] = carried?.unfilled ?? [];
   const recent: Recent[] = [];
   const startedAt = new Date().toISOString();
+  const secrets = new Secrets();
   let observation: Observation | null = null;
-  let steps = 0;
-  let actions = 0;
+  let steps = carried?.steps ?? 0;
+  let actions = carried?.actions ?? 0;
   let reason = `reached --max-steps ${options.maxSteps}`;
   let status: WalkResult["status"] = "done";
+  let blocker: Blocker | undefined;
+  let home = options.url ?? carried?.home ?? null;
+  if (carried !== null && carried.stepsLog !== "") await files.append("steps.jsonl", carried.stepsLog);
 
   const save = async (state: RunStatus) => {
     const last = state !== "running" && state !== "login";
     await files.writeJson("frontier.json", seen.entries(), last);
     await files.writeJson("findings.json", summarize(findings), last);
     await files.writeJson("unfilled.json", unfilled, last);
-    await files.writeJson("status.json", {
+    await files.writeJson("status.json", secrets.scrub({
       status: state,
       goal: null,
       policy: options.policy,
+      fixtures: options.fixtures ?? null,
+      session: options.session,
+      home,
       url: observation?.url ?? null,
       steps,
+      maxSteps: options.maxSteps,
+      allow: allowList(options.allow),
+      ...(options.resume === undefined ? {} : { resumedFrom: options.resume.from }),
       actions,
       findings: findings.length,
       findingsFile,
@@ -150,10 +197,11 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       record: options.record ?? null,
       model: options.model,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
-    }, last);
+    }), last);
   };
   await save("running");
 
@@ -163,8 +211,13 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   try {
     const deps = injected ?? (await defaultWalkDeps(options));
     browser = deps.browser;
-    await loadAuth(files.store, options.session, browser);
+    // A resumed walk goes on in the browser the blocked one left open, which already holds its sign-in.
+    if (options.resume === undefined) await loadAuth(files.store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
+    if (options.resume?.open !== undefined) {
+      secrets.add(options.resume.open);
+      await browser.open(options.resume.open);
+    }
     if (options.record !== undefined) {
       await browser.record(options.record);
       recording = true;
@@ -221,7 +274,46 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       }
     };
 
-    let home = options.url ?? null;
+    /** Types each value `resume` was given into its field, and marks the field tried, so the walk does not block on it again. */
+    const typeGiven = async (values: { label: string; value: string }[]) => {
+      if (values.length === 0) return;
+      const page = await observe(deps.browser);
+      seen.see(page.url, page.elements);
+      const here = seen.here(page.url, page.elements);
+      for (const { label, value } of values) {
+        const field = here.find(({ element }) => element.label === label && operationOf(element) === "TYPE_TEXT");
+        if (field === undefined) throw new Error(`the page has no field "${label}" to type the value into`);
+        secrets.add(value, label);
+        await deps.browser.act({ operation: "TYPE_TEXT", ref: field.element.ref, value });
+        field.entry.tried = true;
+        steps++;
+        actions++;
+        const given: WalkStep = {
+          step: steps,
+          url: page.url,
+          hash: page.hash,
+          kind: "TYPE_TEXT",
+          role: field.element.role,
+          label,
+          ref: field.element.ref,
+          value: MASK,
+          fixture: null,
+          executed: true,
+          reason: "given to resume",
+          confidence: null,
+          probabilities: {},
+          destructive: null,
+          latencyMs: 0,
+          usage: {},
+          model: options.model,
+        };
+        await files.append("steps.jsonl", `${JSON.stringify(given)}\n`);
+        options.progress?.(stepLine({ ...given, operation: given.kind }));
+      }
+      await save("running");
+    };
+    await typeGiven(options.resume?.values ?? []);
+
     let origin: string | null = null;
     let previous: Previous | undefined;
     let acted: { recent: Recent; hash: string } | null = null;
@@ -246,7 +338,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         acted.recent.pageChanged = observation.hash !== acted.hash;
         acted = null;
       }
-      await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
+      await files.append("observed.jsonl", `${JSON.stringify(secrets.scrub({ step: steps + 1, ...observation }))}\n`);
 
       await inspect(observation, previous, steps + 1, home);
       previous = undefined;
@@ -310,6 +402,19 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         await record();
         continue;
       }
+      const stops = chosen.blocker !== null && WALK_BLOCKERS.has(chosen.blocker.kind) && chosen.blocker.probability >= THRESHOLD;
+      if (chosen.operation === "TYPE_TEXT" && chosen.value === null && stops) {
+        const empty = observation.elements.filter((element) => operationOf(element) === "TYPE_TEXT" && (element.value ?? "") === "");
+        reason = step.reason = `no fixture value belongs in ${chosen.element.label}, on a ${chosen.blocker!.kind} step`;
+        blocker = {
+          kind: chosen.blocker!.kind as Blocker["kind"],
+          fields: empty.map(({ ref, label }) => ({ ref, label })),
+          reason,
+        };
+        status = "blocked";
+        await record();
+        break;
+      }
       if (chosen.operation === "TYPE_TEXT" && chosen.value === null) {
         chosen.entry.tried = true;
         step.reason = `no fixture value belongs in ${chosen.element.label}`;
@@ -351,7 +456,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     observation ??= await observe(browser);
     if (status === "stopped") await saveAuth(files.store, options.session, browser);
     await save(status);
-    return {
+    return secrets.scrub({
       status,
       url: observation.url,
       steps,
@@ -361,8 +466,9 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       out: options.out,
       record: options.record ?? null,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       durationMs: elapsed(),
-    };
+    } satisfies WalkResult);
   } catch (error) {
     reason = (error as Error).message;
     if (recording && browser !== null) {

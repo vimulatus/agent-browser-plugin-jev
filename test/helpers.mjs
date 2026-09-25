@@ -149,7 +149,7 @@ export function choiceAnswer(options, chosen, p = 0.9) {
 /**
  * A Jev that answers each request from one hand-written intent per step, shaped to the questions the request asks:
  * `operation`, `target` (the element index), `value` for the target's field or `values` by index, `kind` and `kindP`
- * for the blocker, and the nouls `outcome`, `destructive`, `secret`. What an intent leaves out is answered as the
+ * for the blocker, and the nouls `outcome`, `destructive`, `secret` and `same` (a finding seen before). What an intent leaves out is answered as the
  * unremarkable case: nothing blocks, nothing is destructive or secret, the first target, no value.
  */
 export function scriptedJev(intents) {
@@ -168,6 +168,7 @@ export function scriptedJev(intents) {
       return choiceAnswer(options, value);
     }
     if (question.type === "noul") {
+      if (key.startsWith("same_as_finding_")) return { type: "noul", noul: intent.same ?? 0.05 };
       const noul = { goal_outcome_visible: intent.outcome, action_is_destructive: intent.destructive, field_is_secret: intent.secret }[key];
       return { type: "noul", noul: noul ?? (key === "goal_outcome_visible" && intent.operation === "DONE" ? 0.95 : 0.05) };
     }

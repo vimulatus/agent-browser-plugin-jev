@@ -5,7 +5,8 @@ import { isAbsolute, join } from "node:path";
 import { activeScope } from "../dist/scope.js";
 import { newRunDir } from "../dist/session.js";
 import { actionsBefore, walk } from "../dist/walk.js";
-import { driven, isolatedScopes, lab, lines, replayingJev } from "./helpers.mjs";
+import { driven, isolatedScopes, lab, lines, replayingJev, scriptedJev } from "./helpers.mjs";
+import { parseResumeArgs, resumeOptions } from "../dist/resume.js";
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "get url", "console", "errors", "network requests"]);
 
@@ -158,7 +159,7 @@ test("the fixture Choice offers every key and a NONE, and the walk logs the key 
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   const asked = jev.requests[0].questions;
-  assert.deepEqual(Object.keys(asked), ["next_element", "fixture_value_1", "fixture_value_2", "fixture_value_3"]);
+  assert.deepEqual(Object.keys(asked), ["next_element", "fixture_value_1", "fixture_value_2", "fixture_value_3", "blocker_kind"]);
   assert.deepEqual(Object.keys(asked.fixture_value_1.criteria), [
     "email",
     "password",
@@ -506,4 +507,76 @@ test("a walk over a page whose document returned 500 records the finding and goe
   assert.equal(result.status, "done");
   assert.ok(acts(browser).includes("click @e2"), "the walk clicks on past the error page");
   assert.equal(json(options.out, "findings.json").findings[0].title, "GET /error-500.html returned 500");
+});
+
+/** An app whose Settings sits behind a sign-in, and whose Orders page logs an error. */
+const BEHIND_SIGN_IN = [
+  { url: "http://127.0.0.1:8765/index.html", title: "Home", snapshot: '- link "Orders" [ref=e1]\n- link "Settings" [ref=e2]' },
+  {
+    url: "http://127.0.0.1:8765/orders.html",
+    title: "Orders",
+    snapshot: '- button "Refresh" [ref=e1]',
+    console: [{ type: "error", text: "orders failed to load" }],
+  },
+  {
+    url: "http://127.0.0.1:8765/settings.html",
+    title: "Sign in",
+    snapshot: '- textbox "Email" [ref=e1]\n- textbox "Password" [ref=e2]\n- button "Sign in" [ref=e3]',
+  },
+  { url: "http://127.0.0.1:8765/settings.html?signed-in", title: "Settings", snapshot: '- button "Save" [ref=e1]' },
+];
+
+test("a walk that meets a sign-in no fixture fills ends blocked, and resume goes on from its frontier with its findings (#102)", async (t) => {
+  const scopes = isolatedScopes();
+  const moves = { "0 click @e1": 1, "0 click @e2": 2, "2 click @e3": 3 };
+  const first = {
+    goal: "",
+    session: "lab",
+    maxSteps: 20,
+    out: newRunDir(scopes, "lab"),
+    url: BEHIND_SIGN_IN[0].url,
+    allow: "all",
+    model: "jev-latest",
+    human: false,
+    policy: "errors",
+  };
+  t.after(() => rmSync(first.out, { recursive: true, force: true }));
+  const blockedBrowser = walkBrowser(BEHIND_SIGN_IN, moves);
+  const blocked = await walk(first, {
+    browser: blockedBrowser,
+    repro: walkBrowser(BEHIND_SIGN_IN, moves, true),
+    jev: scriptedJev([{ target: "1" }, { same: 0.95 }, { target: "1", kind: "sign_in" }]),
+    policyJev: silent,
+    scopes,
+  });
+  assert.equal(blocked.status, "blocked");
+  assert.equal(blocked.steps, 4);
+  assert.deepEqual(blocked.blocker, {
+    kind: "sign_in",
+    fields: [
+      { ref: "e1", label: "Email" },
+      { ref: "e2", label: "Password" },
+    ],
+    reason: "no fixture value belongs in Email, on a sign_in step",
+  });
+  assert.equal(blocked.findings, 1);
+
+  const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "Email=ada@example.com", "--value", "Password=hunter22"]));
+  delete options.progress;
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  const browser = walkBrowser(BEHIND_SIGN_IN, moves);
+  browser.state.index = 2;
+  const resumed = await walk(options, { browser, repro: walkBrowser(BEHIND_SIGN_IN, moves, true), jev: scriptedJev([]), policyJev: silent, scopes });
+
+  assert.equal(resumed.status, "done");
+  assert.match(resumed.reason, /every control the walk found has been tried/);
+  assert.deepEqual(acts(browser), ["fill @e1 ada@example.com", "fill @e2 hunter22", "click @e3", "click @e1"], "no control tried before the block is tried again");
+  const findings = json(options.out, "findings.json").findings;
+  assert.deepEqual(findings.map((finding) => [finding.title, finding.step]), [["http://127.0.0.1:8765/orders.html logs orders failed to load", 2]]);
+  const steps = lines(join(options.out, "steps.jsonl"));
+  assert.deepEqual(steps.map((step) => step.step), [1, 2, 3, 4, 5, 6, 7, 8], "the steps before the block are kept, and numbering goes on");
+  assert.equal(steps[4].value, "•••");
+  for (const file of ["status.json", "steps.jsonl", "observed.jsonl"]) {
+    assert.doesNotMatch(readFileSync(join(options.out, file), "utf8"), /hunter22|ada@example\.com/, `${file} holds a resume value`);
+  }
 });

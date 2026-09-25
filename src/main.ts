@@ -73,7 +73,7 @@ async function main(argv: string[]): Promise<number> {
     const options = resumeOptions(discoverScopes(), parseResumeArgs(argv.slice(1)));
     process.stderr.write(`${NAME}: writing to ${options.out}\n`);
     stopOnSignals(options);
-    const result = await run(options);
+    const result = options.goal === "" ? await walk(options as WalkOptions) : await run(options);
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return EXIT[result.status];
   }

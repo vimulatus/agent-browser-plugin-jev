@@ -211,11 +211,13 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 3 when it was stopped. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
+It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 2 when a sign-in or a code step blocked it, 3 when it was stopped. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
 The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+
+A field no fixture value fits is marked tried and listed in `unfilled.json`, and the walk goes on, except on a sign-in or a code step: when Jev judges the page `sign_in` or `otp` over 0.5, the walk ends `blocked`, exits 2, and carries `blocker` with every empty field on the page. `soab resume <session> --value "<label>=<value>"` goes on from there: it reloads the blocked walk's `frontier.json` and findings, types the values, marks those fields tried, and walks on from the page it blocked on with the steps it had left. Controls tried before the block are not tried again, the step numbers go on, and the findings from before and after the block land in one `findings.json`, with `steps.jsonl` copied over so a finding after the block replays from the steps before it.
 
 A policy that collects `har` cannot walk, because a HAR is recorded over a reload of the page. Judge one page with `--max-steps 0` instead.
 

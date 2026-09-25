@@ -130,13 +130,17 @@ export function resumeOptions(scopes: Scopes, args: ResumeArgs): RunOptions {
   if (state.status !== "blocked" && state.status !== "stopped") {
     throw new Error(`session ${args.session}'s last run is ${state.status}, not blocked or stopped: nothing to resume`);
   }
-  if (typeof state.goal !== "string") throw new Error(`session ${args.session}'s last run is a walk`);
   const maxSteps = typeof state.maxSteps === "number" ? state.maxSteps : DEFAULT_MAX_STEPS;
   const taken = typeof state.steps === "number" ? state.steps : 0;
+  // A walk numbers its steps on from the one it resumes, so its budget counts them; a goal run starts its count again.
+  const walk = typeof state.goal !== "string";
+  const left = args.maxSteps ?? Math.max(0, maxSteps - taken);
   return {
-    goal: state.goal,
+    goal: walk ? "" : (state.goal as string),
+    ...(walk && typeof state.policy === "string" ? { policy: state.policy } : {}),
+    ...(walk && typeof state.fixtures === "string" ? { fixtures: state.fixtures } : {}),
     session: args.session,
-    maxSteps: args.maxSteps ?? Math.max(0, maxSteps - taken),
+    maxSteps: walk ? taken + left : left,
     out: args.out ?? newRunDir(scopes, args.session),
     allow: widened(allowOf(state.allow), args.allow),
     model: typeof state.model === "string" ? state.model : DEFAULT_MODEL,

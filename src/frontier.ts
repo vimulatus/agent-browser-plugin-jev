@@ -21,9 +21,9 @@ function keyOf(path: string, element: Element): string {
   return `${path}|${element.role}|${element.label}`;
 }
 
-/** The frontier of one walk: every control it has seen, in the order it first saw them. */
-export function frontier(): Frontier {
-  const entries = new Map<string, Entry>();
+/** The frontier of one walk: every control it has seen, in the order it first saw them, from `saved` when it resumes. */
+export function frontier(saved: Entry[] = []): Frontier {
+  const entries = new Map<string, Entry>(saved.map((entry) => [`${entry.path}|${entry.role}|${entry.label}`, entry]));
   return {
     see(url, elements) {
       const path = new URL(url).pathname;

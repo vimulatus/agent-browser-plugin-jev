@@ -58,6 +58,14 @@ test("--fixtures overrides a built-in key and adds its own", (t) => {
   assert.throws(() => loadFixtures(path), /email must be the text to type/);
 });
 
+/** Jev's answer that nothing on the page stops the walk. */
+const NOTHING_BLOCKS = {
+  type: "choice",
+  choice: "none",
+  confidence: 0.91,
+  probabilities: { otp: 0.01, sign_in: 0.01, approval: 0.01, captcha: 0.01, missing_value: 0.01, permission: 0.01, error_page: 0.01, rate_limit: 0.01, unknown: 0.01, none: 0.91 },
+};
+
 test("a fixture key the Choice is not sure of leaves the field empty", async () => {
   const snapshot = '- textbox "Nickname" [ref=e1]\n- textbox "Email" [ref=e2]';
   const elements = parseSnapshot(snapshot);
@@ -81,6 +89,7 @@ test("a fixture key the Choice is not sure of leaves the field empty", async () 
             confidence: 0.42,
             probabilities: { email: 0.2, password: 0.05, name: 0.42, phone: 0.05, address: 0.03, NONE: 0.25 },
           },
+          blocker_kind: NOTHING_BLOCKS,
         },
       };
     },
