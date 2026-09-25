@@ -87,16 +87,16 @@ soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped, see [Stop a run](#stop-a-run). `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped, see [Stop a run](#stop-a-run). A run that fails, on a missing key or a full store say, prints no JSON line: it writes `status: "failed"` with the error as `reason` to `<out>/status.json`, prints the error on stderr and exits 1. `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
 
 | Flag | Value | What it does |
 |---|---|---|
 | `--url` | `<url>` | Opens this page before the first step |
-| `--session` | `<name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION` |
+| `--session` | `<name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION`. Every run needs one of the two, or it exits 1 |
 | `--max-steps` | `<n>` | Stops after n steps; default 60. `0` judges the page and moves nothing |
 | `--out` | `<dir>` | Where the run writes its artifacts; default a new `.soab/sessions/<session>/runs/<timestamp>/`, see [What a run writes](#what-a-run-writes) |
 | `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, comma separated, or `all` |
-| `--model` | `<name>` | The System One model; default `jev-latest` |
+| `--model` | `<name>` | The System One model; default `$TYPESAFE_MODEL`, else `jev-latest` |
 | `--policy` | `<file>` | The policy to judge with, by path or by name: project, then global, then shipped |
 | `--fixtures` | `<file>` | The values a walk types into forms; replaces a built-in key or adds one |
 | `--record` | `<file>` | Records the run to this `.webm` or `.mp4`, cursor included |
@@ -156,7 +156,7 @@ soab resume checkout --value "Verification Code=482913"
 # exits 0: {"status":"done",...}
 ```
 
-`soab resume <session>` reads the session's last run, which must have ended `blocked` or `stopped`, and goes on in the same browser from the page it ended on: no `--url`, no sign-in loaded, no restart. It types each `--value "<label>=<value>"` into the field of that label, as `blocker.fields` names it; a bare `--value <value>` fills the only field when there is one. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 with a message that names the problem. With no `--value` it looks at the page again and goes on: that covers a push approval and a retry after a 429. `--allow <verbs>` adds to the last run's allow list, so after a `permission` block `soab resume checkout --allow delete` makes the click the run refused; the widened list is in the new run's `status.json` as `allow`. A magic-link sign-in has nothing to type, and the link opens in the person's own browser rather than the session's. `--open` fixes that: `soab resume checkout --open <link>` opens it in the session's browser first, then goes on with the goal. The link is masked like a value, in every file and on stdout. Then it runs the same loop as `run`, with the last run's goal, `--allow`, model and the steps it had left, and exits the same way: 0 done, 2 blocked, 3 stopped.
+`soab resume <session>` reads the session's last run, which must have ended `blocked` or `stopped`, and goes on in the same browser from the page it ended on: no `--url`, no sign-in loaded, no restart. With no session named it takes `$AGENT_BROWSER_SESSION`. It types each `--value "<label>=<value>"` into the field of that label, as `blocker.fields` names it; a bare `--value <value>` fills the only field when there is one. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 with a message that names the problem. With no `--value` it looks at the page again and goes on: that covers a push approval and a retry after a 429. `--allow <verbs>` adds to the last run's allow list, so after a `permission` block `soab resume checkout --allow delete` makes the click the run refused; the widened list is in the new run's `status.json` as `allow`. A magic-link sign-in has nothing to type, and the link opens in the person's own browser rather than the session's. `--open` fixes that: `soab resume checkout --open <link>` opens it in the session's browser first, then goes on with the goal. The link is masked like a value, in every file and on stdout. Then it runs the same loop as `run`, with the last run's goal, `--allow`, model and the steps it had left, and exits the same way: 0 done, 2 blocked, 3 stopped.
 
 A value on the command line lands in shell history and the process list, so two more flags take one from elsewhere: `--value-env "<label>=<VAR>"` reads the environment variable, and `--value-file "<label>=<path>"` reads the file, trimmed. Both take the bare form too. An unset variable or a missing file exits 1 and names it, without printing a value.
 
@@ -200,7 +200,7 @@ soab run "log in as alice@example.com with password secret and open Settings" \
 soab run --policy perf --url http://127.0.0.1:8765/orders.html --max-steps 0 --session soab-check
 ```
 
-It prints `{ status, url, findings, findingsFile, inferred, out, durationMs }`: `done`, the page it judged, the findings the rules raised, the absolute path of `findings.json`, the path of the file holding every answer Jev gave, the run directory, and how long the command took. A policy with no `judge` section leaves out `inferred`, because it asked nothing. Like every run it names `<out>` on stderr first and writes `findings.json`, laid out as a walk's with `step: 0`, and `status.json`; it exits 0, and 1 with `status: "failed"` when it could not judge. It takes the flags of any run, and `--allow`, `--fixtures`, `--record` and `--human` have nothing to do, because it takes no action. A policy never asks Jev about an `about:` page, so a session that has opened nothing yet raises no finding.
+It prints `{ status, url, findings, findingsFile, inferred, out, durationMs }`: `done`, the page it judged, the findings the rules raised, the absolute path of `findings.json`, the path of the file holding every answer Jev gave, the run directory, and how long the command took. A policy with no `judge` section leaves out `inferred`, because it asked nothing. Like every run it names `<out>` on stderr first and writes `findings.json`, laid out as a walk's with `step: 0`, and `status.json`; it exits 0, and 1 with `status: "failed"` when it could not judge. It takes the flags of any run and, like any run, needs `--session` or `AGENT_BROWSER_SESSION`; `--allow`, `--fixtures`, `--record` and `--human` have nothing to do, because it takes no action. A policy never asks Jev about an `about:` page, so a session that has opened nothing yet raises no finding.
 
 ## Walk an app
 
@@ -210,7 +210,7 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 2 when a sign-in or a code step blocked it, 3 when it was stopped. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
+It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 2 when a sign-in or a code step blocked it, 3 when it was stopped, and 1 when it failed, as a goal run does. A finding whose replay fails, or a control agent-browser refuses, does not fail the walk; a store full past its cap does. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
@@ -336,6 +336,7 @@ These lines go to stderr while the run is in flight; stdout stays the one JSON l
 | `soab: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
 | `step 4 · TYPE "Verification Code" ← ••• · 0.90` | After each step of a goal run or a walk: the act, its target, the value through the same mask as the run's files, and Jev's confidence. `--quiet` turns these off |
 | `soab: the page needs a person, finish it on the window at <url>` | The run opened a window for a captcha or a page it cannot name. Tell the person to finish it there |
+| `soab: stopping after this step` | Ctrl-C or SIGTERM reached the run, see [Stop a run](#stop-a-run) |
 
 `status` in `status.json` is `running`, `login`, `done`, `blocked`, `stopped` or `failed`.
 
@@ -376,16 +377,15 @@ It closes the agent-browser session named `checkout`, so its browser holds no si
 
 | File | What is in it |
 |---|---|
-| `status.json` | `{ status, goal, url, steps, actions, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A goal run adds `recordings`. A walk sets `goal` to null and adds `policy`, `findings`, `findingsFile` and `unfilled`; a goal run with `--policy` adds the same `findingsFile` |
+| `status.json` | `{ status, goal, policy, session, url, steps, maxSteps, allow, actions, findings, findingsFile, out, record, model, reason, startedAt, updatedAt, durationMs }`, rewritten at every step. `durationMs` grows while the run is `running` and holds still once it ends. A goal run adds `recordings`, and `findingsFile` only with `--policy`. A walk sets `goal` to null and adds `fixtures`, `home`, the page it started on, and `unfilled`. A blocked run adds `blocker`, and a resumed one `resumedFrom`. `--max-steps 0` writes `{ status, goal, policy, session, home, url, steps, maxSteps, findings, findingsFile, out, reason, startedAt, updatedAt, durationMs }`, `steps` and `maxSteps` both 0 |
 | `state.json` | The walk's cookies and storage, saved before each replay for the `-repro` session to load |
 | `observed.jsonl` | The page at every step: its URL, its controls, its console, its errors, its requests |
 | `inferred.jsonl` | One line per decision on a goal run: the operation, the target, the value, whether it ran, and every probability behind it. One line per answer when a policy judges: the question, what it ran over, the item and the answer |
-| `findings.json` | What a walk found, below |
+| `findings.json` | What a walk, `--max-steps 0` or a goal run with `--policy` found, below |
 | `evidence/` | `<n>.webm` and `<n>-<step>.png` per finding, from the replay |
 | `frontier.json` | Every control the walk has seen, with `tried` |
 | `unfilled.json` | `{ label, url }` for each field no fixture value fitted |
 | `steps.jsonl` | One line per walk step: the control, the value, whether it ran and why not |
-| `worker.log` | What the run printed when the protocol started it |
 
 `findings.json` holds `{ findings, summary }`: every finding in the order the walk raised them, then `{ title, severity, where }` for each, for an agent to read first.
 
