@@ -74,15 +74,16 @@ export interface Browser {
   /** Opens a blank tab and makes it active; `closeTab` closes it and returns to the one before. */
   openTab(): Promise<void>;
   closeTab(): Promise<void>;
-  /** Cookies and storage, to a file and back, so a second session can start where this one is. */
+  /** Cookies and storage, to a file and back, so a second session or a relaunch starts where this browser is. */
   saveState(path: string): Promise<void>;
+  /** Loads what `saveState` wrote, for the next `open`. With no browser open, it launches one headless. */
   loadState(path: string): Promise<void>;
   authProfiles(): Promise<AuthProfile[]>;
   signIn(profile: string): Promise<void>;
-  /** Closes the browser, saving the session's cookies and storage for `reopen`. */
+  /** Closes the browser. What it held is gone unless `saveState` wrote it first. */
   close(): Promise<void>;
-  /** Opens the closed browser on `url` with the session's cookies and storage, in a window when `headed`. */
-  reopen(url: string, headed: boolean): Promise<void>;
+  /** Launches a browser in a window on `url`, after `close`. */
+  openWindow(url: string): Promise<void>;
 }
 
 /**

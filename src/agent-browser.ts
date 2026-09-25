@@ -113,15 +113,15 @@ export function agentBrowser(session: string, human = false, run: Run = agentBro
     openTab: () => call("tab", "new", "about:blank"),
     closeTab: () => call("tab", "close"),
     saveState: (path) => call("state", "save", path),
-    loadState: (path) => call("state", "load", path),
+    // agent-browser 0.38.1 launches the first browser after a headed one closed headed again, unless the command names
+    // the mode, and the next command relaunches it headless without what it loaded (#67).
+    loadState: (path) => call("state", "load", path, "--headed", "false"),
     async authProfiles() {
       const { profiles } = (await run(["auth", "list"])) as { profiles?: AuthProfile[] };
       return profiles ?? [];
     },
     signIn: (profile) => call("auth", "login", profile),
     close: () => call("close"),
-    // agent-browser 0.38.1 has no live switch between headed and headless, so each is a relaunch. `--restore` rides
-    // only on these opens: on a browser launched without it, it relaunches the browser and drops what it held.
-    reopen: (url, headed) => call("open", url, "--restore", session, ...(headed ? ["--headed"] : [])),
+    openWindow: (url) => call("open", url, "--headed"),
   };
 }

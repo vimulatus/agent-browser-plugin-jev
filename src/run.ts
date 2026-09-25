@@ -1,6 +1,6 @@
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import { loadAuth, saveAuth } from "./auth.js";
+import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
@@ -308,7 +308,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
           process.stderr.write(`${NAME}: sign in on the window at ${page.url}\n`);
           await write("login");
         },
-        signedIn: () => saveAuth(store, options.session, deps.browser),
+        signedIn: (state) => keepAuth(store, options.session, state),
       });
       if (landed === null) {
         reason = step.reason = `the login on ${page.url} timed out after ${options.loginTimeoutMs / 1000} s in the window`;
@@ -414,7 +414,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     }
 
     await stopRecording();
-    // A blocked run does not save: after a handoff it can be on the blank browser of #67, signed out.
+    // A blocked run does not save, so a login that timed out does not overwrite the session's last sign-in.
     if (status === "done") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
     await write(status);

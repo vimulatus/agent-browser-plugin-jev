@@ -77,14 +77,15 @@ test("DONE and BLOCKED are not acts", async () => {
   assert.deepEqual(calls, []);
 });
 
-test("reopen restores the session, in a window only when headed", async () => {
+test("a window opens headed, and a state load names headless so the browser it launches holds", async () => {
   const { browser, calls } = recording();
-  await browser.reopen("http://127.0.0.1:8765/login.html", true);
-  await browser.reopen("http://127.0.0.1:8765/settings.html", false);
+  await browser.openWindow("http://127.0.0.1:8765/login.html");
+  await browser.loadState("/tmp/auth.json");
   assert.deepEqual(calls, [
-    "open http://127.0.0.1:8765/login.html --restore jev-test --headed",
-    "open http://127.0.0.1:8765/settings.html --restore jev-test",
+    "open http://127.0.0.1:8765/login.html --headed",
+    "state load /tmp/auth.json --headed false",
   ]);
+  assert.ok(!calls.some((call) => call.includes("--restore")));
 });
 
 test("a snapshot names its page by the origin agent-browser reports", async () => {

@@ -326,7 +326,7 @@ test("a goal run carries durationMs, and status.json keeps the number the run en
 
 const LOGIN = "http://127.0.0.1:8765/login.html";
 const SETTINGS = "http://127.0.0.1:8765/settings.html";
-const HEADED = `open ${LOGIN} --restore jev-test --headed`;
+const HEADED = `open ${LOGIN} --headed`;
 
 /** The person signs in on the window: each poll after the headed open serves the next page in `byPoll`, then the last one stays. */
 function signsIn(byPoll) {
@@ -359,7 +359,8 @@ test("a login page the goal cannot fill is handed to a window, and the run goes 
     "wait --load networkidle",
     "state save <file>",
     "close",
-    `open ${SETTINGS} --restore jev-test`,
+    "state load <file>",
+    `open ${SETTINGS}`,
     "wait --load networkidle",
     "state save <file>",
   ]);
@@ -374,6 +375,18 @@ test("a login page the goal cannot fill is handed to a window, and the run goes 
   assert.equal(result.actions, 1);
   assert.deepEqual(result.recordings, []);
   assert.equal(status(out).status, "done");
+});
+
+test("after the window closes the run goes on headless, signed in, on the page where the person landed", async (t) => {
+  const { result, browser, out } = await drive("handoff", null, {}, signsIn([0, 3]));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(browser.state.blank, false, "no command after the window landed on a fresh browser");
+  assert.deepEqual(browser.state.browser, { headed: false });
+  assert.deepEqual(browser.state.loaded, [SAVED_STATE], "the way back loads what the window saved");
+  assert.ok(!browser.state.calls.some((call) => call.includes("--restore")));
+  assert.equal(result.status, "done");
+  assert.equal(result.url, SETTINGS);
 });
 
 test("status.json reads login with the page while the window is open", async (t) => {
@@ -453,18 +466,29 @@ test("an SSO page on the way is not taken for the app: the run waits until the p
 
   assert.equal(result.status, "done");
   assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "snapshot -i", "state save <file>"]);
-  assert.ok(acts(browser).includes(`open ${SETTINGS} --restore jev-test`));
+  assert.ok(acts(browser).includes(`open ${SETTINGS}`));
   assert.ok(!acts(browser).some((call) => call.includes("accounts.example-sso.test")));
 });
 
-test("a login nobody completes times out, closes the window and ends the run blocked", async (t) => {
+test("a login nobody completes times out, goes back headless to the login page and ends the run blocked", async (t) => {
   const { result, browser, out } = await drive("handoff", null, { loginTimeoutMs: 0 }, signsIn([]));
   t.after(() => rmSync(out, { recursive: true, force: true }));
 
   assert.equal(result.status, "blocked");
   assert.equal(result.reason, `the login on ${LOGIN} timed out after 0 s in the window`);
-  assert.deepEqual(acts(browser), ["auth list", "close", HEADED, "wait --load networkidle", "close"]);
-  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i"]);
+  assert.deepEqual(acts(browser), [
+    "auth list",
+    "close",
+    HEADED,
+    "wait --load networkidle",
+    "state save <file>",
+    "close",
+    "state load <file>",
+    `open ${LOGIN}`,
+    "wait --load networkidle",
+  ]);
+  assert.deepEqual(polls(browser), ["wait --load networkidle", "snapshot -i", "state save <file>"]);
+  assert.deepEqual(browser.state.browser, { headed: false }, "the session's next launch is not a window");
   const [login] = steps(out);
   assert.equal(login.executed, false);
   assert.match(login.reason, /timed out/);
@@ -482,7 +506,7 @@ test("a handoff saves the sign-in to the session's auth.json before the run goes
   const served = browser.run.bind(browser);
   let stored;
   browser.run = async (args) => {
-    if (args.join(" ") === `open ${SETTINGS} --restore jev-test`) stored = await activeScope(scopes).store.get(AUTH);
+    if (args.join(" ") === `open ${SETTINGS}`) stored = await activeScope(scopes).store.get(AUTH);
     return served(args);
   };
 
@@ -541,7 +565,8 @@ test("a recorded run stops the recording for the window and records the rest to 
     "wait --load networkidle",
     "state save <file>",
     "close",
-    `open ${SETTINGS} --restore jev-test`,
+    "state load <file>",
+    `open ${SETTINGS}`,
     "wait --load networkidle",
     `record start ${second} --cursor`,
     "record stop",
