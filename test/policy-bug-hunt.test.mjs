@@ -233,6 +233,23 @@ test("bug-hunt reports a page that logs a console error, as errors does (#111)",
   assert.deepEqual(await hunt(page), [["/cart.html logs cart total is NaN", "high"]]);
 });
 
+test("a page no app served, about:blank before the first open, is not judged (#115)", async () => {
+  const run = async (args) =>
+    ({
+      "snapshot -i": { origin: "about:blank", snapshot: "" },
+      "get title": { title: "" },
+      console: { messages: [] },
+      errors: { errors: [] },
+      "network requests": { requests: [] },
+    })[args.join(" ")];
+  const blank = await observe(driven({ run }));
+  const jev = replay();
+  const inferences = await judge(policy, blank, { content: "" }, jev);
+  const applied = applyPolicy(policy, blank, { content: "", inferences });
+  const { findings } = await judgeFindings(policy, blank, { content: "" }, applied, jev);
+  assert.deepEqual([findings, jev.calls.length], [[], 0]);
+});
+
 // A title says what the user can see happening. What made it happen is the reader's job, not Jev's.
 const CAUSAL = [/because/i, /due to/i, /caused by/i, /bug in/i];
 
