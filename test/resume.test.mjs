@@ -78,3 +78,17 @@ test("a value for a field the blocker does not name is refused, naming the field
     /not blocked on a field "Password"; it needs "One-time code"/,
   );
 });
+
+test("resume --allow after a permission block makes the click the run refused, and ends done (#90)", async (t) => {
+  const scopes = isolatedScopes();
+  const goal = 'type "DELETE" and delete the 40 records';
+  const refuse = { operation: "CLICK", target: "2", destructive: 0.95, verb: "delete" };
+  const first = await labRun(t, ["delete-confirm"], [refuse], goal, { scopes });
+  assert.equal(first.result.blocker.kind, "permission");
+  assert.deepEqual(first.status.allow, []);
+
+  const { result, acts, status } = await resume(t, scopes, ["--allow", "delete"], lab("delete-confirm", "deleted"), [refuse, { operation: "DONE" }]);
+  assert.deepEqual(acts, ["click @e3", "state save <file>"]);
+  assert.equal(result.status, "done");
+  assert.deepEqual(status.allow, ["delete"], "the widened allow list is in the new run's status.json");
+});
