@@ -2,8 +2,9 @@
 import { parseRunArgs, USAGE, UsageError } from "./args.js";
 import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
-import { defaultOut, run } from "./run.js";
-import { init } from "./scope.js";
+import { run } from "./run.js";
+import { discoverScopes, init } from "./scope.js";
+import { newRunDir } from "./session.js";
 import { walk, type WalkOptions } from "./walk.js";
 
 async function main(argv: string[]): Promise<number> {
@@ -22,7 +23,7 @@ async function main(argv: string[]): Promise<number> {
     if (options.goal === "" && options.policy === undefined) {
       throw new UsageError('run needs a goal or a policy: run "<goal>", or run --policy <file>');
     }
-    if (options.out === "") options.out = defaultOut();
+    if (options.out === "") options.out = newRunDir(discoverScopes(), options.session);
     process.stderr.write(`${NAME}: writing to ${options.out}\n`);
     if (options.goal === "") {
       process.stdout.write(`${JSON.stringify(await walk(options as WalkOptions))}\n`);

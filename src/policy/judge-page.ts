@@ -1,9 +1,8 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openBrowser } from "../browser.js";
-import { NAME } from "../name.js";
 import { discoverScopes, type Scopes } from "../scope.js";
+import { newRunDir } from "../session.js";
 import { observe } from "../observe.js";
 import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
@@ -30,9 +29,9 @@ export interface Judged {
 }
 
 /** `run --policy <file> --max-steps 0`: observe the current page once and apply the policy. */
-export async function judgePage({ session, policyPath, out, jev = typesafeJev(), scopes }: JudgePageOptions): Promise<Judged> {
+export async function judgePage({ session, policyPath, out, jev = typesafeJev(), scopes = discoverScopes() }: JudgePageOptions): Promise<Judged> {
   const elapsed = stopwatch();
-  const policy = await loadPolicy(policyPath, scopes ?? discoverScopes());
+  const policy = await loadPolicy(policyPath, scopes);
   const browser = openBrowser(session);
   const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
   const content = policy.collect.includes("content") ? await readContent(browser) : undefined;
@@ -43,7 +42,7 @@ export async function judgePage({ session, policyPath, out, jev = typesafeJev(),
   const judged = await judgeFindings(policy, observation, gathered, applied, jev);
   const answered = [...inferences, ...judged.inferences];
   if (answered.length === 0) return { findings: judged.findings, durationMs: elapsed() };
-  const inferred = writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), `${NAME}-`)));
+  const inferred = writeInferred(answered, out ?? newRunDir(scopes, session));
   return { findings: judged.findings, inferred, durationMs: elapsed() };
 }
 

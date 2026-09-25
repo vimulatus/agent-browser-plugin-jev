@@ -42,6 +42,11 @@ export function discoverScopes({ cwd = process.cwd(), home = homedir() } = {}): 
   }
 }
 
+/** Where sessions keep their runs and their sign-in: the project scope when there is one, else the global. */
+export function activeScope(scopes: Scopes): Scope {
+  return scopes.project ?? scopes.global;
+}
+
 /** The project scope first, then the global one: the order every lookup follows. */
 export function inOrder(scopes: Scopes): Scope[] {
   return scopes.project === undefined ? [scopes.global] : [scopes.project, scopes.global];
