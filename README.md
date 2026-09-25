@@ -56,13 +56,26 @@ soab init
 
 So a `./.soab/policies/perf.yaml` replaces the shipped `perf` for that repo, and deleting it brings the shipped one back. A path such as `./checks/mine.yaml` is read as a path.
 
-`config.json` in the project merges over the one in `~/.soab/`, key by key. A string in it can read the environment with `${VAR}`, so the file can be committed with no secret in it. A `${VAR}` that is not set is an error that names it. Nothing reads `config.json` during a run yet: the store settings in it arrive with the storage cap and the remote store.
+`config.json` in the project merges over the one in `~/.soab/`, key by key. A string in it can read the environment with `${VAR}`, so the file can be committed with no secret in it. A `${VAR}` that is not set is an error that names it. A run reads `store.maxBytes` from it; `store.type` is always `local` until the remote store arrives.
 
 ```json
-{ "store": { "type": "local", "headers": { "Authorization": "Bearer ${STORE_TOKEN}" } } }
+{ "store": { "type": "local", "maxBytes": 1073741824 } }
 ```
 
 Each scope keeps its state in a store, under keys like `policies/<policy>.yaml`. The local store, the only one today, keeps each key as a file in the scope directory.
+
+### Storage cap
+
+`store.maxBytes` caps the active scope's store: 1 GiB (`1073741824`) when `config.json` sets none. Before each write into the store, the run evicts the least recently used state until the write fits:
+
+1. run directories, `sessions/<session>/runs/<timestamp>/`, whole, least recently used first
+2. then each session's `auth.json`, least recently used first, once no run is left to evict
+
+Never evicted: policies, `config.json`, and the run that is writing, while it runs. A write that does not fit once everything evictable is gone fails the run, with the cap and the size in `reason`; the write does not happen. A running run keeps 4 KiB of the cap free (half the cap, under 8 KiB), so its last `status.json` still lands when the cap stops it. Near the cap, a run rewrites `status.json` in place rather than evict another run to make room for a second copy.
+
+Last use is the store's own record, in `sessions/.used.json`, not file access times, which macOS does not keep reliably. A run is used while it writes, and a sign-in when a run loads it. `soab session reset` deletes through the same path as eviction.
+
+A recording or a screenshot is written by agent-browser, so its size is known only after it lands. The run measures it then: it evicts to fit it, or deletes it and fails. Until a recording stops, it can take the store past the cap by its own size. Only files in the store count: a run under an `--out` outside the store writes uncapped, though the sign-in it saves is still capped, and `--record <file>` lands where it names, relative to the working directory, so it is capped only when that file is in the run directory.
 
 ## Run a goal
 
