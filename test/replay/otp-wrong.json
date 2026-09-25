@@ -1,0 +1,213 @@
+{
+  "goal": "verify the one-time code 123456",
+  "pages": "otp-wrong",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "TYPE_TEXT",
+          "probabilities": {
+            "CLICK": 0.01,
+            "TYPE_TEXT": 0.94,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.01,
+            "DONE": 0.01,
+            "BLOCKED": 0.01
+          },
+          "confidence": 0.94
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "2",
+          "probabilities": {
+            "1": 0.1,
+            "2": 0.9
+          },
+          "confidence": 0.9
+        },
+        "type_text_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": {
+            "1": 1
+          },
+          "confidence": 1
+        },
+        "type_text_value_1": {
+          "type": "choice",
+          "choice": "123456",
+          "probabilities": {
+            "123456": 0.9,
+            "NONE": 0.1
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.02
+        },
+        "action_is_destructive": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": {
+            "delete": 0.025,
+            "send": 0.025,
+            "pay": 0.025,
+            "publish": 0.025,
+            "submit": 0.9
+          },
+          "confidence": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 30
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "CLICK",
+          "probabilities": {
+            "CLICK": 0.94,
+            "TYPE_TEXT": 0.01,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.01,
+            "DONE": 0.01,
+            "BLOCKED": 0.01
+          },
+          "confidence": 0.94
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "2",
+          "probabilities": {
+            "1": 0.1,
+            "2": 0.9
+          },
+          "confidence": 0.9
+        },
+        "type_text_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": {
+            "1": 1
+          },
+          "confidence": 1
+        },
+        "type_text_value_1": {
+          "type": "choice",
+          "choice": "NONE",
+          "probabilities": {
+            "123456": 0.1,
+            "NONE": 0.9
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "action_is_destructive": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": {
+            "delete": 0.025,
+            "send": 0.025,
+            "pay": 0.025,
+            "publish": 0.025,
+            "submit": 0.9
+          },
+          "confidence": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 30
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "DONE",
+          "probabilities": {
+            "CLICK": 0.01,
+            "TYPE_TEXT": 0.01,
+            "SCROLL_UP": 0.01,
+            "SCROLL_DOWN": 0.01,
+            "WAIT": 0.01,
+            "DONE": 0.94,
+            "BLOCKED": 0.01
+          },
+          "confidence": 0.94
+        },
+        "click_target": {
+          "type": "choice",
+          "choice": "2",
+          "probabilities": {
+            "1": 0.1,
+            "2": 0.9
+          },
+          "confidence": 0.9
+        },
+        "type_text_target": {
+          "type": "choice",
+          "choice": "1",
+          "probabilities": {
+            "1": 1
+          },
+          "confidence": 1
+        },
+        "type_text_value_1": {
+          "type": "choice",
+          "choice": "NONE",
+          "probabilities": {
+            "123456": 0.1,
+            "NONE": 0.9
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.12
+        },
+        "action_is_destructive": {
+          "type": "noul",
+          "noul": 0.05
+        },
+        "destructive_verb": {
+          "type": "choice",
+          "choice": "submit",
+          "probabilities": {
+            "delete": 0.025,
+            "send": 0.025,
+            "pay": 0.025,
+            "publish": 0.025,
+            "submit": 0.9
+          },
+          "confidence": 0.9
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 30
+      }
+    }
+  ]
+}

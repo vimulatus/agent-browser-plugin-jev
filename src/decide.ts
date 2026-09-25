@@ -1,6 +1,6 @@
 import { choiceOf, noulOf, type Criteria, type Jev, type Question, type Request } from "./jev.js";
 import type { Observation } from "./observe.js";
-import { DESTRUCTIVE, DESTRUCTIVE_VERB, NEXT_ACTION, OPERATION_LABELS, TARGET, VALUE, VERBS } from "./questions.js";
+import { DESTRUCTIVE, DESTRUCTIVE_VERB, NEXT_ACTION, OPERATION_LABELS, OUTCOME, TARGET, VALUE, VERBS } from "./questions.js";
 import type { Element, Operation as ElementOperation } from "./snapshot.js";
 import { NO_VALUE } from "./spans.js";
 
@@ -29,6 +29,8 @@ export interface Decision {
   valueProbabilities: Record<string, number>;
   password: boolean;
   destructive: { probability: number; verb: string | null } | null;
+  /** On a DONE, how likely Jev judges the page to show the goal's outcome; null on any other operation. */
+  outcome: number | null;
   confidence: number;
   probabilities: Record<string, number>;
   targetProbabilities: Record<string, number>;
@@ -117,7 +119,8 @@ export interface DecideInput {
 
 /**
  * One System One request per step. It picks the operation, a target for every operation that has one,
- * the span of the goal that belongs in each field it may type into, and whether clicking is irreversible.
+ * the span of the goal that belongs in each field it may type into, whether clicking is irreversible, and
+ * whether the page shows the goal's outcome, which a DONE needs.
  * The speculative answers for the operations and fields Jev did not pick are never read.
  */
 export async function decide(input: DecideInput): Promise<Decision> {
@@ -134,6 +137,11 @@ export async function decide(input: DecideInput): Promise<Decision> {
 
   const questions: Record<string, Question> = {
     operation: { type: "choice", criteria: operations, instructions: { rules: NEXT_ACTION } },
+    goal_outcome_visible: {
+      type: "noul",
+      instructions: { rules: OUTCOME },
+      criteria: { true: "The page shows the goal's outcome.", false: "The page does not show it yet." },
+    },
   };
   for (const [operation, targets] of byOperation) {
     questions[`${operation.toLowerCase()}_target`] = targetQuestion(operation, targets);
@@ -187,6 +195,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
     valueProbabilities: {},
     password: false,
     destructive: null,
+    outcome: operation === "DONE" ? noulOf(reply.answers, "goal_outcome_visible") : null,
     confidence: answer.confidence,
     probabilities: answer.probabilities,
     targetProbabilities: {},

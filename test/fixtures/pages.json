@@ -104,5 +104,56 @@
       "title": "Settings",
       "snapshot": "- heading \"Settings\" [level=1, ref=e1]\n- link \"Profile\" [ref=e7]"
     }
+  ],
+  "otp-wrong": [
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]\n- button \"Verify\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]: 123456\n- button \"Verify\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]: 123456\n- button \"Verify\" [ref=e3]\n- alert: Invalid code"
+    }
+  ],
+  "otp-still": [
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]\n- button \"Verify\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]: 123456\n- button \"Verify\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/verify-otp.html",
+      "title": "Verify",
+      "snapshot": "- heading \"Enter your code\" [level=1, ref=e1]\n- textbox \"Verification Code\" [ref=e2]: 123456\n- button \"Verify\" [ref=e3]"
+    }
+  ],
+  "save-toast": [
+    {
+      "url": "http://127.0.0.1:8765/profile.html",
+      "title": "Profile",
+      "snapshot": "- heading \"Profile\" [level=1, ref=e1]\n- textbox \"Display name\" [ref=e2]\n- button \"Save\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/profile.html",
+      "title": "Profile",
+      "snapshot": "- heading \"Profile\" [level=1, ref=e1]\n- textbox \"Display name\" [ref=e2]: Ada\n- button \"Save\" [ref=e3]"
+    },
+    {
+      "url": "http://127.0.0.1:8765/profile.html",
+      "title": "Profile",
+      "snapshot": "- heading \"Profile\" [level=1, ref=e1]\n- textbox \"Display name\" [ref=e2]: Ada\n- button \"Save\" [ref=e3]\n- status: Saved"
+    }
   ]
 }

@@ -47,6 +47,7 @@ test("one request offers the operation, a target per operation, a value per fiel
     "action_is_destructive",
     "click_target",
     "destructive_verb",
+    "goal_outcome_visible",
     "operation",
     "type_text_target",
     "type_text_value_1",
@@ -77,6 +78,21 @@ test("one request offers the operation, a target per operation, a value per fiel
   assert.equal(decision.value, "alice@example.com");
   assert.equal(decision.valueProbability, 0.9);
   assert.equal(decision.valueProbabilities["secret"], 0.04);
+});
+
+test("a DONE carries Jev's judgment that the page shows the goal's outcome, and no other operation reads it", async () => {
+  const done = replay("login")[3];
+  assert.equal(done.answers.operation.choice, "DONE");
+  const settings = { observation: observation(pages("login")[3].snapshot, "http://127.0.0.1:8765/settings.html") };
+  const decision = await decide(input(replayingJev([done]), settings));
+  assert.equal(decision.operation, "DONE");
+  assert.equal(decision.outcome, 0.96);
+
+  const typed = await decide(input(replayingJev(replay("login"))));
+  assert.equal(typed.outcome, null);
+
+  const { goal_outcome_visible, ...unjudged } = done.answers;
+  await assert.rejects(decide(input(ask(unjudged), settings)), /goal_outcome_visible is not a probability/);
 });
 
 test("each value question names its own field, and the chosen field's answer is the one read", async () => {
@@ -116,6 +132,7 @@ test("--allow all leaves the destructive questions out of the request", async ()
   await decide(input(jev, { allow: "all" }));
   assert.deepEqual(Object.keys(jev.requests[0].questions).sort(), [
     "click_target",
+    "goal_outcome_visible",
     "operation",
     "type_text_target",
     "type_text_value_1",

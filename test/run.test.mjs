@@ -83,7 +83,43 @@ test("a goal walk types from the goal, clicks through and lands done", async (t)
   );
   assert.equal(jev.requests[2].state.recent_actions[0].pageChanged, true);
   assert.equal(status(out).status, "done");
+  assert.equal(steps(out).at(-1).outcome, 0.96, "the DONE logs Jev's judgment that the goal's outcome shows");
   assert.equal(lines(join(out, "observed.jsonl")).length, 4);
+});
+
+test("a DONE on a page that still shows the code step after Verify ends blocked, not done (#74)", async (t) => {
+  const { result, browser, out } = await drive("otp-wrong");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.url, "http://127.0.0.1:8765/verify-otp.html");
+  assert.equal(result.reason, "the page did not move on after clicking Verify: it does not show the goal's outcome");
+  assert.deepEqual(acts(browser), ["fill @e2 123456", "click @e3"], "a blocked run saves no sign-in");
+  assert.equal(status(out).status, "blocked");
+  const done = steps(out).at(-1);
+  assert.equal(done.operation, "DONE");
+  assert.equal(done.outcome, 0.12);
+  assert.equal(done.reason, result.reason);
+});
+
+test("a DONE right after a click that left the page as it was ends blocked, whatever Jev judged", async (t) => {
+  const { result, out } = await drive("otp-still");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "the page did not move on after clicking Verify");
+  assert.equal(steps(out).at(-1).outcome, 0.8);
+});
+
+test("a goal whose outcome shows on the same page ends done once it shows", async (t) => {
+  const { result, browser, jev, out } = await drive("save-toast");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(result.url, "http://127.0.0.1:8765/profile.html");
+  assert.equal(result.reason, "every requirement is visibly satisfied");
+  assert.deepEqual(acts(browser), ["fill @e2 Ada", "click @e3", "state save <file>"]);
+  assert.ok(jev.requests.every((request) => request.questions.goal_outcome_visible.type === "noul"));
 });
 
 test("a goal run without a policy judges nothing and writes no findings", async (t) => {

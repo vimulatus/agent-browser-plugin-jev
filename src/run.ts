@@ -91,6 +91,7 @@ interface Step {
   targetProbabilities: Record<string, number>;
   valueProbabilities: Record<string, number>;
   destructive: Decision["destructive"];
+  outcome: number | null;
   latencyMs: number;
   usage: Record<string, number>;
   model: string;
@@ -131,6 +132,22 @@ function stalledOn(decision: Decision): string | null {
     return `the goal holds no value for ${decision.label}`;
   }
   return null;
+}
+
+/**
+ * Why a DONE does not end the run done, or null when it does. Filled fields and a clicked submit are not the goal's
+ * outcome, so the page did not move on when the last click and every act after it left the page as it was, or when
+ * Jev judges the page does not show the outcome.
+ */
+function notDone(decision: Decision, history: Step[]): string | null {
+  const at = history.map((step) => step.operation).lastIndexOf("CLICK");
+  const clicked = at === -1 ? null : history[at];
+  if (clicked !== null && history.slice(at).every((step) => step.pageChanged === false)) {
+    return `the page did not move on after clicking ${clicked.label}`;
+  }
+  if ((decision.outcome ?? 0) > THRESHOLD) return null;
+  if (clicked === null) return "the page does not show the goal's outcome";
+  return `the page did not move on after clicking ${clicked.label}: it does not show the goal's outcome`;
 }
 
 function logged(decision: Decision): string | null {
@@ -358,6 +375,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         targetProbabilities: decision.targetProbabilities,
         valueProbabilities: decision.valueProbabilities,
         destructive: decision.destructive,
+        outcome: decision.outcome,
         latencyMs: decision.latencyMs,
         usage: decision.usage,
         model: decision.model,
@@ -387,8 +405,9 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         continue;
       }
       if (decision.operation === "DONE") {
-        status = "done";
-        reason = step.reason = "every requirement is visibly satisfied";
+        const unmet = notDone(decision, history);
+        if (unmet === null) status = "done";
+        reason = step.reason = unmet ?? "every requirement is visibly satisfied";
         await write("running", step);
         break;
       }
