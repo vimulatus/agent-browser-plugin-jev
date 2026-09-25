@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { agentBrowser, agentBrowserCli } from "../dist/agent-browser.js";
+import { agentBrowser, agentBrowserCli, retryAfterOf } from "../dist/agent-browser.js";
 
 function capturing() {
   const calls = [];
@@ -93,4 +93,11 @@ test("a snapshot names its page by the origin agent-browser reports", async () =
   assert.deepEqual(await browser.snapshot(true), { url: "http://127.0.0.1:8765/", tree: '- button "Save" [ref=e1]' });
   await browser.snapshot(false);
   assert.deepEqual(calls, ["snapshot -i", "snapshot"]);
+});
+
+test("a request carries the seconds its Retry-After asks for, in seconds or as a date", () => {
+  assert.equal(retryAfterOf({ "retry-after": "30" }), 30);
+  assert.equal(retryAfterOf({ "Retry-After": "Fri, 25 Sep 2026 14:00:30 GMT" }, Date.parse("Fri, 25 Sep 2026 14:00:00 GMT")), 30);
+  assert.equal(retryAfterOf({ "content-type": "text/html" }), undefined);
+  assert.equal(retryAfterOf(undefined), undefined);
 });

@@ -132,3 +132,23 @@ test("a run that ends done carries no blocker, and every step logs the blocker p
   assert.equal(steps.length, 3);
   for (const step of steps) assert.equal(step.blockerProbabilities.none, 0.9);
 });
+
+test("a page whose document returned 500 blocks as error_page, before any Jev request or click (#86)", async (t) => {
+  const { result, jev, acts } = await labRun(t, ["error-500"], [], "open my invoices");
+  assert.equal(jev.requests.length, 0, "no model call for a server error");
+  assert.deepEqual(acts, []);
+  assert.equal(result.steps, 0);
+  assert.deepEqual(result.blocker, { kind: "error_page", fields: [], reason: "the page returned HTTP 500" });
+});
+
+test("a page whose document returned 429 blocks as rate_limit, with its Retry-After (#86)", async (t) => {
+  const { result, jev, acts } = await labRun(t, ["rate-limit"], [], "open my invoices");
+  assert.equal(jev.requests.length, 0);
+  assert.deepEqual(acts, [], "it does not click Try again");
+  assert.deepEqual(result.blocker, {
+    kind: "rate_limit",
+    fields: [],
+    reason: "the page returned HTTP 429, retry after 30 s",
+    retryAfter: 30,
+  });
+});

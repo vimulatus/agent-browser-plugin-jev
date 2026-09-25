@@ -88,7 +88,10 @@
         "resourceType": "Document",
         "mimeType": "text/html",
         "timestamp": 1,
-        "retryAfter": 30
+        "responseHeaders": {
+          "content-type": "text/html; charset=utf-8",
+          "retry-after": "30"
+        }
       }
     ]
   },

@@ -36,6 +36,8 @@ export interface Request {
   resourceType: string;
   mimeType: string | null;
   timestamp: number;
+  /** The seconds a `Retry-After` response header asks to wait, when the response sent one. */
+  retryAfter?: number;
 }
 
 /** A saved login: the page it signs in on, and the name `signIn` takes. */

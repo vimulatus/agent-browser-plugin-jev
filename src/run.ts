@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
-import { blockerOf, type Blocker, type Cause } from "./blocker.js";
+import { blockerOf, networkBlocker, type Blocker, type Cause } from "./blocker.js";
 import { openRun, StoreFull } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
@@ -381,6 +381,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const content = await readContent(browser);
       if (policy !== null) await inspect(policy, observation, content, previous, steps + 1);
       previous = undefined;
+      const failed = networkBlocker(observation);
+      if (failed !== null) {
+        blocker = failed;
+        reason = failed.reason;
+        break;
+      }
 
       const decision = await decide({
         jev,
@@ -467,7 +473,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     // A blocked run does not save, so a login that timed out does not overwrite the session's last sign-in.
     if (status === "done") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
-    if (status === "blocked") blocker = blockerOf(reason ?? "", decided, cause);
+    if (status === "blocked") blocker ??= blockerOf(reason ?? "", decided, cause);
     await write(status);
     return {
       status,

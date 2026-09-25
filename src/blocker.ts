@@ -1,4 +1,5 @@
 import { THRESHOLD, type Decision, type Field } from "./decide.js";
+import type { Observation } from "./observe.js";
 
 /** What stopped a blocked run. Agents branch on `kind` and fill `fields`, so both are part of the output shape. */
 export type BlockerKind =
@@ -19,6 +20,23 @@ export interface Blocker {
   reason: string;
   /** On `rate_limit`, the seconds the page's `Retry-After` asks to wait, when it sent one. */
   retryAfter?: number;
+}
+
+/**
+ * The blocker the page's own document request names, with no question asked: a 5xx is `error_page` and a 429 is
+ * `rate_limit`. Null when the page loaded, or its request is not in the log. The log keeps every request since the
+ * browser opened, so the page's request is the last document request for its URL.
+ */
+export function networkBlocker(page: Observation): Blocker | null {
+  const document = page.requests.filter((request) => request.resourceType === "Document" && request.url === page.url).at(-1);
+  const status = document?.status ?? null;
+  if (status === 429) {
+    const retryAfter = document?.retryAfter;
+    const wait = retryAfter === undefined ? "" : `, retry after ${retryAfter} s`;
+    return { kind: "rate_limit", fields: [], reason: `the page returned HTTP 429${wait}`, ...(retryAfter === undefined ? {} : { retryAfter }) };
+  }
+  if (status !== null && status >= 500) return { kind: "error_page", fields: [], reason: `the page returned HTTP ${status}` };
+  return null;
 }
 
 /** The kinds a value given to `resume` gets past. The rest need a person, a permission or time. */

@@ -134,6 +134,8 @@ A blocked run's result, and its `status.json`, carry `blocker`, so an agent can 
 
 `fields` lists every empty field on the page the goal holds no value for, with its ref and label, when the kind is `otp`, `sign_in` or `missing_value`; it is empty for the others. `reason` is the sentence the run has always given. A run that ends `done` or `failed` has no `blocker`.
 
+A server error or a rate limit is named from the network, before Jev is asked anything and before anything is clicked: when the page's own document request returned 5xx the run ends `error_page` with `the page returned HTTP 500`, and on 429 it ends `rate_limit`, adding `retryAfter`, the seconds of the response's `Retry-After` header when it sent one. A walk records a 5xx as a finding, as it always has, and goes on.
+
 The kind costs no extra call: every step's request asks Jev a `blocker_kind` Choice beside the operation, and `inferred.jsonl` logs its probabilities as `blockerProbabilities`. The run reads it only when it ends blocked. A refused click is `permission` without asking. A field the goal holds no value for is `missing_value`, unless Jev judges the page a code or a sign-in step. Otherwise the kind is Jev's pick when it is over 0.5, and `unknown` when Jev is unsure or judges that nothing stops the goal.
 
 ### Signing in

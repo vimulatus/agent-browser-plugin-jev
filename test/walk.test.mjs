@@ -5,7 +5,7 @@ import { isAbsolute, join } from "node:path";
 import { activeScope } from "../dist/scope.js";
 import { newRunDir } from "../dist/session.js";
 import { actionsBefore, walk } from "../dist/walk.js";
-import { driven, isolatedScopes, lines, replayingJev } from "./helpers.mjs";
+import { driven, isolatedScopes, lab, lines, replayingJev } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "get url", "console", "errors", "network requests"]);
 
@@ -483,4 +483,27 @@ test("a policy that records a HAR cannot drive a walk", async () => {
     drive("walk-shop", { policy: "perf", url: "http://127.0.0.1:8765/index.html" }),
     /judge one page with --max-steps 0/,
   );
+});
+
+test("a walk over a page whose document returned 500 records the finding and goes on (#86)", async (t) => {
+  const [broken, home] = lab("error-500", "home");
+  const browser = walkBrowser([broken, home], { "0 click @e2": 1 });
+  const repro = walkBrowser([broken, home], {}, true);
+  const options = {
+    goal: "",
+    session: "jev-test",
+    maxSteps: 10,
+    out: newRunDir(isolatedScopes(), "jev-test"),
+    url: broken.url,
+    allow: "all",
+    model: "jev-latest",
+    human: false,
+    policy: "errors",
+  };
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  const result = await walk(options, { browser, repro, jev: replayingJev([]), policyJev: silent, scopes: isolatedScopes() });
+
+  assert.equal(result.status, "done");
+  assert.ok(acts(browser).includes("click @e2"), "the walk clicks on past the error page");
+  assert.equal(json(options.out, "findings.json").findings[0].title, "GET /error-500.html returned 500");
 });
