@@ -63,12 +63,19 @@ test("run --policy errors --max-steps 0 prints those findings as JSON", () => {
       env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), "soab-home-")), PATH: `${FAKE_BIN}:${process.env.PATH}`, JEV_FIXTURES: FIXTURES },
     },
   );
-  assert.equal(result.stderr, "");
-  assert.equal(result.status, 0);
   const printed = JSON.parse(result.stdout);
+  assert.equal(result.stderr, `soab: writing to ${printed.out}\n`);
+  assert.equal(result.status, 0);
   assert.ok(
     Number.isInteger(printed.durationMs) && printed.durationMs >= 0,
     `the command printed durationMs ${printed.durationMs}`,
   );
-  assert.deepEqual(printed, { findings: FINDINGS, durationMs: printed.durationMs });
+  assert.deepEqual(printed, {
+    status: "done",
+    url: "http://127.0.0.1:8781/index.html",
+    findings: FINDINGS,
+    findingsFile: join(printed.out, "findings.json"),
+    out: printed.out,
+    durationMs: printed.durationMs,
+  });
 });

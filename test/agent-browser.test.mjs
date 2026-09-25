@@ -39,6 +39,30 @@ test("a failed command names the command and the error", async () => {
   );
 });
 
+/** An exec that fails the way promisified execFile does on a non-zero exit: the output rides on the error. */
+function exitingWith(code, stdout, stderr) {
+  return async (file, args) => {
+    throw Object.assign(new Error(`Command failed: ${file} ${args.join(" ")}`), { code, stdout, stderr });
+  };
+}
+
+test("a command that exits non-zero with a JSON reply throws with agent-browser's error", async () => {
+  const reason = "Element '@e21' is covered by <div#content> at its click point";
+  const exec = exitingWith(1, JSON.stringify({ success: false, data: null, error: reason }), "");
+  await assert.rejects(() => agentBrowserCli("jev-test", false, exec)(["click", "@e21"]), (error) => {
+    assert.equal(error.message, `agent-browser click @e21: ${reason}`);
+    return true;
+  });
+});
+
+test("a command that exits non-zero with no JSON reply throws with its stderr", async () => {
+  const exec = exitingWith(1, "", "ffmpeg write failed: Broken pipe (os error 32)\n");
+  await assert.rejects(
+    () => agentBrowserCli("jev-test", false, exec)(["record", "stop"]),
+    /^Error: agent-browser record stop: ffmpeg write failed: Broken pipe \(os error 32\)$/,
+  );
+});
+
 /** The adapter over a binary that answers every command with `data`, keeping each argv. */
 function recording(data = {}, human = false) {
   const calls = [];

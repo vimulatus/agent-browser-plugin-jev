@@ -194,14 +194,13 @@ soab run "log in as alice@example.com with password secret and open Settings" \
 
 ## Judge one page
 
-`--max-steps 0` observes the page the session is on, applies the policy once and moves nothing:
+`--max-steps 0` opens `--url` when you give one, else stays on the page the session is on, observes it, applies the policy once and moves nothing:
 
 ```bash
-agent-browser --session soab-check open http://127.0.0.1:8765/orders.html
-soab run --policy perf --max-steps 0 --session soab-check
+soab run --policy perf --url http://127.0.0.1:8765/orders.html --max-steps 0 --session soab-check
 ```
 
-It prints `{ findings, inferred, durationMs }`: the findings the rules raised, the path of the file holding every answer Jev gave, and how long the command took. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
+It prints `{ status, url, findings, findingsFile, inferred, out, durationMs }`: `done`, the page it judged, the findings the rules raised, the absolute path of `findings.json`, the path of the file holding every answer Jev gave, the run directory, and how long the command took. A policy with no `judge` section leaves out `inferred`, because it asked nothing. Like every run it names `<out>` on stderr first and writes `findings.json`, laid out as a walk's with `step: 0`, and `status.json`; it exits 0, and 1 with `status: "failed"` when it could not judge. It takes the flags of any run, and `--allow`, `--fixtures`, `--record` and `--human` have nothing to do, because it takes no action. A policy never asks Jev about an `about:` page, so a session that has opened nothing yet raises no finding.
 
 ## Walk an app
 
@@ -215,7 +214,7 @@ It prints `{ status, url, steps, actions, findings, findingsFile, out, record, r
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
-The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated.
+The frontier holds one entry per page path, role and label, so the same button on two pages is two entries and the same button under two query strings is one. When a page has nothing untried left the walk opens the page of the oldest entry still pending, and when nothing is pending it stops. `--max-steps` is the budget. The walk never leaves the origin it started on: a control that navigates away is undone by reopening the start page. `--allow` gates the irreversible controls exactly as a goal run does, and a control Jev calls destructive without it is marked tried and never activated. A control agent-browser refuses to act on, one another element covers say, is marked tried and its step in `steps.jsonl` carries `executed: false` and agent-browser's reason; the walk goes on to the rest.
 
 A field no fixture value fits is marked tried and listed in `unfilled.json`, and the walk goes on, except on a sign-in or a code step: when Jev judges the page `sign_in` or `otp` over 0.5, the walk ends `blocked`, exits 2, and carries `blocker` with every empty field on the page. `soab resume <session> --value "<label>=<value>"` goes on from there: it reloads the blocked walk's `frontier.json` and findings, types the values, marks those fields tried, and walks on from the page it blocked on with the steps it had left. Controls tried before the block are not tried again, the step numbers go on, and the findings from before and after the block land in one `findings.json`, with `steps.jsonl` copied over so a finding after the block replays from the steps before it.
 
@@ -234,7 +233,7 @@ Jev picks the key per field, with a `NONE` option for a field no value fits. Not
 
 ### The replay behind a finding
 
-A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`.
+A new finding is reproduced on the spot. The walk takes the last three actions before it from `steps.jsonl` and replays them on a fresh tab from the page it started on, under `record start <out>/evidence/<n>.webm --cursor`, with a screenshot after each act has finished loading. Each action is found again by its role and its label, because a ref dies with its snapshot, and each field gets the same fixture value the walk typed, the real one rather than the mask `steps.jsonl` keeps. If the policy raises the same title on the page the replay lands on, the finding carries `reproduced: true`, its `repro` actions, its `recording`, and the `console` and `errors` lines that page printed. If the page no longer offers the control, or the policy stays quiet, the finding is kept with `reproduced: false`. If the replay itself fails, a recording ffmpeg cannot write say, the finding is kept with `reproduced: false` and `evidenceMissing`, the reason, and the walk goes on.
 
 The replay runs on a session named `<session>-repro`, so it disturbs nothing the walk holds: its own recording, its own active tab, its own refs. Before each replay the walk saves its cookies and storage to `<out>/state.json` with `state save`, and the replay loads them before it opens the start page, so a finding past a login is reached logged in. It is closed when the walk ends, and every act in it is human-paced whether or not the walk is: the recording is evidence someone watches. It needs ffmpeg on PATH.
 
@@ -324,7 +323,7 @@ report:
 |---|---|
 | `errors` | A request that returned 500 or worse, an error the page threw, an error it logged. It asks Jev nothing, so it needs no key. `errors.yaml` |
 | `perf` | A request slower than a second that the page needs, told apart from a slow beacon or third party, and a page still showing a spinner. `perf.yaml` |
-| `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
+| `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an uncaught page error or a console error, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
 
 ## From an agent
 

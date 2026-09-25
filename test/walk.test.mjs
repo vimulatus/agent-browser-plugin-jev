@@ -94,6 +94,15 @@ async function drive(name, { moves = {}, repro = {}, scopes = isolatedScopes(), 
   const recorded = scenario(name);
   const browser = walkBrowser(walkPages(recorded.pages), moves);
   const replay = walkBrowser(walkPages(repro.pages ?? recorded.pages), repro.moves ?? {}, true);
+  const serve = replay.run;
+  replay.run = async (args) => {
+    const failure = repro.fails?.[args.join(" ")];
+    if (failure !== undefined) {
+      replay.state.calls.push(args.join(" "));
+      throw new Error(failure);
+    }
+    return serve(args);
+  };
   const jev = replayingJev(recorded.walk ?? recorded.responses);
   const policyJev = recorded.policy === undefined ? silent : replayingPolicyJev(recorded.policy);
   const options = {
@@ -268,6 +277,23 @@ test("a finding is replayed on its own session, with a shot per action and the c
   assert.ok(isAbsolute(result.findingsFile) && result.findingsFile.endsWith("/findings.json"), result.findingsFile);
   assert.equal(result.findingsFile, join(out, "findings.json"));
   assert.equal(json(out, "status.json").findingsFile, result.findingsFile);
+});
+
+test("a replay whose recording fails keeps the finding without evidence, and the walk ends done (#112)", async (t) => {
+  const run = signupRun("signup-bug");
+  run.repro.fails = { "record stop": "agent-browser record stop: ffmpeg write failed: Broken pipe (os error 32)" };
+  const { result, repro, out } = await drive("walk-repro", run);
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(result.findings, 1);
+  const [finding] = json(out, "findings.json").findings;
+  assert.equal(finding.title, `${WELCOME} logs TypeError: order is not defined`);
+  assert.equal(finding.reproduced, false);
+  assert.equal(finding.recording, undefined);
+  assert.equal(finding.evidenceMissing, "agent-browser record stop: ffmpeg write failed: Broken pipe (os error 32)");
+  assert.deepEqual(acts(repro).slice(-3), ["record stop", "tab close", "close"], "the replay's tab is closed all the same");
+  assert.equal(json(out, "status.json").status, "done");
 });
 
 test("a finding the replay cannot raise again is kept, unreproduced", async (t) => {
@@ -579,4 +605,54 @@ test("a walk that meets a sign-in no fixture fills ends blocked, and resume goes
   for (const file of ["status.json", "steps.jsonl", "observed.jsonl"]) {
     assert.doesNotMatch(readFileSync(join(options.out, file), "utf8"), /hunter22|ada@example\.com/, `${file} holds a resume value`);
   }
+});
+
+/** A home page whose first link another element covers, and whose second leads to a page that logs an error. */
+const COVERED = [
+  { url: "http://127.0.0.1:8765/index.html", title: "Home", snapshot: '- link "Fork me on GitHub" [ref=e1]\n- link "Orders" [ref=e2]' },
+  {
+    url: "http://127.0.0.1:8765/orders.html",
+    title: "Orders",
+    snapshot: "",
+    console: [{ type: "error", text: "orders failed to load" }],
+  },
+];
+
+test("a click agent-browser refuses is recorded on its step, and the walk goes on to the next control (#109)", async (t) => {
+  const scopes = isolatedScopes();
+  const options = {
+    goal: "",
+    session: "lab",
+    maxSteps: 10,
+    out: newRunDir(scopes, "lab"),
+    url: COVERED[0].url,
+    allow: "all",
+    model: "jev-latest",
+    human: false,
+    policy: "errors",
+  };
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  const browser = walkBrowser(COVERED, { "0 click @e2": 1 });
+  const serve = browser.run;
+  browser.run = async (args) => {
+    if (args.join(" ") === "click @e1") throw new Error("agent-browser click @e1: Element '@e1' is covered by <div#content>");
+    return serve(args);
+  };
+  const result = await walk(options, {
+    browser,
+    repro: walkBrowser(COVERED, { "0 click @e2": 1 }, true),
+    jev: scriptedJev([{ target: "1" }, { target: "2" }]),
+    policyJev: silent,
+    scopes,
+  });
+
+  assert.equal(result.status, "done");
+  assert.match(result.reason, /every control the walk found has been tried/);
+  assert.deepEqual(json(options.out, "findings.json").findings.map((finding) => finding.title), [
+    "http://127.0.0.1:8765/orders.html logs orders failed to load",
+  ]);
+  const [refused] = lines(join(options.out, "steps.jsonl"));
+  assert.equal(refused.label, "Fork me on GitHub");
+  assert.equal(refused.executed, false);
+  assert.equal(refused.reason, "CLICK failed: agent-browser click @e1: Element '@e1' is covered by <div#content>");
 });

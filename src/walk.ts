@@ -22,7 +22,7 @@ import {
   type Jev as PolicyJev,
   type Previous,
 } from "./policy/index.js";
-import { reproduce } from "./repro.js";
+import { reproduce, type Reproduction } from "./repro.js";
 import { allowList, refused, stopAsked, type RunOptions, type RunStatus } from "./run.js";
 import { MASK, Secrets } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
@@ -142,7 +142,8 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
 /**
  * Walks the app from the start page, trying every control it finds once. Every step applies the policy and
  * appends what it found to `findings.json`, deduped against the findings before it. The walk never leaves the
- * origin it started on, and stops when the frontier or `--max-steps` runs out.
+ * origin it started on, and stops when the frontier or `--max-steps` runs out. A control whose act fails is tried, and
+ * the walk goes on.
  */
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
   const elapsed = stopwatch();
@@ -254,22 +255,24 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         await deps.browser.saveState(state);
         await files.admit(state);
         replayed = deps.repro;
-        Object.assign(
-          candidate,
-          await reproduce({
-            browser: deps.repro,
-            state,
-            files,
-            home: from,
-            number: findings.length,
-            actions: actionsBefore(options.out, candidate.step),
-            fixtures,
-            fires: async (replay, acted) => {
-              const { fired: again } = await firesOn(deps.repro, replay, acted);
-              return again.some((one) => one.title === candidate.title);
-            },
-          }),
-        );
+        // A replay that fails on its own, a recording ffmpeg cannot write say, costs the finding its evidence, not the walk.
+        const reproduction = await reproduce({
+          browser: deps.repro,
+          state,
+          files,
+          home: from,
+          number: findings.length,
+          actions: actionsBefore(options.out, candidate.step),
+          fixtures,
+          fires: async (replay, acted) => {
+            const { fired: again } = await firesOn(deps.repro, replay, acted);
+            return again.some((one) => one.title === candidate.title);
+          },
+        }).catch((error: unknown): Reproduction => {
+          if (error instanceof StoreFull) throw error;
+          return { reproduced: false, evidenceMissing: (error as Error).message };
+        });
+        Object.assign(candidate, reproduction);
         await save("running");
       }
     };
@@ -428,14 +431,15 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         continue;
       }
 
+      // A control agent-browser refuses, one another element covers say, is tried; a browser that is gone fails the next observe.
+      chosen.entry.tried = true;
       try {
         await browser.act(chosen);
       } catch (error) {
-        reason = step.reason = `${chosen.operation} failed: ${(error as Error).message}`;
+        step.reason = `${chosen.operation} failed: ${(error as Error).message}`;
         await record();
-        break;
+        continue;
       }
-      chosen.entry.tried = true;
       step.executed = true;
       actions++;
       previous = { hash: observation.hash, action: { kind: chosen.operation, label: chosen.element.label } };

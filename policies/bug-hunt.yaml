@@ -36,6 +36,10 @@ report:
     title: "Clicking {{action.label}} on {{page.path}} does not show what a user expects"
   - when: http_status == server_error
     title: "{{request.method}} {{request.path}} returned {{request.status}}"
+  - when: errors.any
+    title: "{{page.path}} throws {{errors[0].text}}"
+  - when: console.errors.any
+    title: "{{page.path}} logs {{console.errors[0].text}}"
   - when: page_shows_error_to_user > 0.7
     title: "{{page.path}} shows the user an error"
   - when: stuck_loading > 0.7

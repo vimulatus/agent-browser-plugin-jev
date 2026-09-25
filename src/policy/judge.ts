@@ -28,7 +28,8 @@ export function questionId(judgment: Judgment, index: number): string {
 
 /**
  * Puts every question of the judge section to Jev in one request, one question per item of its `over`,
- * and returns one inference per answer. A policy with no judge section asks nothing.
+ * and returns one inference per answer. A policy with no judge section asks nothing, and neither does a page no app
+ * served: Jev reads the empty `about:blank` of a session that has not opened anything yet as an error.
  */
 export async function judge(
   policy: Policy,
@@ -37,7 +38,7 @@ export async function judge(
   jev: Jev,
 ): Promise<Inference[]> {
   const judgments = policy.judgments.filter((judgment): judgment is Fanned => judgment.over !== "finding");
-  if (judgments.length === 0) return [];
+  if (judgments.length === 0 || observation.url.startsWith("about:")) return [];
 
   const page = pageItem(observation, gathered);
   const facts = factsByScope(observation, gathered);

@@ -2,7 +2,7 @@
 import { parseRunArgs, USAGE, UsageError } from "./args.js";
 import { openBrowser } from "./browser.js";
 import { NAME } from "./name.js";
-import { judgePage, judgePageOptions } from "./policy/index.js";
+import { judgePage } from "./policy/index.js";
 import { run, type RunOptions } from "./run.js";
 import { parseResumeArgs, resumeOptions } from "./resume.js";
 import { stopSession } from "./runs.js";
@@ -31,11 +31,6 @@ function stopOnSignals(options: RunOptions): void {
 }
 
 async function main(argv: string[]): Promise<number> {
-  const judge = judgePageOptions(argv);
-  if (judge) {
-    process.stdout.write(`${JSON.stringify(await judgePage(judge))}\n`);
-    return 0;
-  }
   if (argv[0] === "init") {
     if (argv.length > 1) throw new UsageError(`init takes no arguments, not "${argv[1]}"`);
     process.stdout.write(`${JSON.stringify(await init(process.cwd()))}\n`);
@@ -84,6 +79,11 @@ async function main(argv: string[]): Promise<number> {
     }
     if (options.out === "") options.out = newRunDir(discoverScopes(), options.session);
     process.stderr.write(`${NAME}: writing to ${options.out}\n`);
+    if (options.goal === "" && options.maxSteps === 0) {
+      const { session, policy, out, url } = options;
+      process.stdout.write(`${JSON.stringify(await judgePage({ session, policyPath: policy!, out, url }))}\n`);
+      return EXIT.done;
+    }
     stopOnSignals(options);
     const result = options.goal === "" ? await walk(options as WalkOptions) : await run(options);
     process.stdout.write(`${JSON.stringify(result)}\n`);

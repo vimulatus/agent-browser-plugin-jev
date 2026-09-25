@@ -86,19 +86,20 @@ test("collecting content puts the text the user reads in front of Jev, which sna
   assert.doesNotMatch(orders.text, /Something went wrong/);
 });
 
-test("the dead Save button, the 500 and the banner come out as three findings", () => {
+test("the dead Save button, the 500, the console error and the banner come out as four findings", () => {
   assert.deepEqual(
     judged.findings.map((finding) => finding.title),
     [
       "Clicking Save on /index.html does nothing",
       "GET /api/orders returned 500",
+      "/index.html logs orders request failed: 500",
       "/index.html shows the user an error",
     ],
   );
 });
 
 test("the severity of each finding comes from the Choice, one question per finding", () => {
-  assert.deepEqual(Object.keys(jev.calls[1].questions), ["severity#0", "severity#1", "severity#2"]);
+  assert.deepEqual(Object.keys(jev.calls[1].questions), ["severity#0", "severity#1", "severity#2", "severity#3"]);
   assert.deepEqual(jev.calls[1].questions["severity#1"].instructions, {
     question: "What does this finding cost the person using the app?",
     subject: "`findings[1]`",
@@ -109,7 +110,7 @@ test("the severity of each finding comes from the Choice, one question per findi
   });
   assert.deepEqual(
     judged.findings.map((finding) => finding.severity),
-    ["high", "critical", "medium"],
+    ["high", "critical", "medium", "medium"],
   );
 });
 
@@ -123,6 +124,7 @@ test("every answer of both passes is an inference with what it judged", () => {
       ["severity", "finding", 0, "high"],
       ["severity", "finding", 1, "critical"],
       ["severity", "finding", 2, "medium"],
+      ["severity", "finding", 3, "medium"],
     ],
   );
   assert.deepEqual(judged.inferences[4].probabilities, { critical: 0.69, high: 0.27, medium: 0.03, low: 0.01 });
@@ -135,7 +137,7 @@ test("a page whose hash moved after the click is not a dead control", async () =
   const inferences = await judge(policy, orders, moved, replay(RECORDED.step));
   assert.deepEqual(
     applyPolicy(policy, orders, { ...moved, inferences }).map((finding) => finding.title),
-    ["GET /api/orders returned 500", "/index.html shows the user an error"],
+    ["GET /api/orders returned 500", "/index.html logs orders request failed: 500", "/index.html shows the user an error"],
   );
 });
 
@@ -147,6 +149,7 @@ test("before the walk has acted, the question that names the action is not asked
     judgedFirst.findings.map((finding) => [finding.title, finding.severity]),
     [
       ["GET /api/orders returned 500", "critical"],
+      ["/index.html logs orders request failed: 500", "medium"],
       ["/index.html shows the user an error", "medium"],
     ],
   );
@@ -165,6 +168,7 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
     result.findings.map((finding) => [finding.title, finding.severity]),
     [
       ["GET /api/orders returned 500", "critical"],
+      ["/index.html logs orders request failed: 500", "medium"],
       ["/index.html shows the user an error", "medium"],
     ],
   );
@@ -176,6 +180,7 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
       ["stuck_loading", 0],
       ["severity", 0],
       ["severity", 1],
+      ["severity", 2],
     ],
   );
 });
@@ -191,6 +196,60 @@ test("with no --out, --max-steps 0 writes its answers under the session, like ev
   assert.equal(dirname(dirname(result.inferred)), join(scopes.global.dir, "sessions", "bug-hunt", "runs"));
 });
 
+/** A page that loads with nothing wrong on its face, and the page questions answered that way. */
+function quietPage({ errors = [], messages = [] }) {
+  const run = async (args) =>
+    ({
+      "snapshot -i": { origin: "http://127.0.0.1:8765/cart.html", snapshot: '- button "Checkout" [ref=e1]' },
+      "get title": { title: "Cart" },
+      console: { messages },
+      errors: { errors },
+      "network requests": { requests: [] },
+    })[args.join(" ")];
+  return observe(driven({ run }));
+}
+
+const QUIET = { answers: { page_shows_error_to_user: { type: "noul", noul: 0.04 }, stuck_loading: { type: "noul", noul: 0.03 } } };
+const HIGH = {
+  answers: {
+    "severity#0": { type: "choice", choice: "high", confidence: 0.7, probabilities: { critical: 0.1, high: 0.7, medium: 0.15, low: 0.05 } },
+  },
+};
+
+async function hunt(page) {
+  const jev = replay(QUIET, HIGH);
+  const inferences = await judge(policy, page, {}, jev);
+  const applied = applyPolicy(policy, page, { inferences });
+  return (await judgeFindings(policy, page, {}, applied, jev)).findings.map((finding) => [finding.title, finding.severity]);
+}
+
+test("bug-hunt reports a page that throws on load, as errors does (#111)", async () => {
+  const page = await quietPage({ errors: [{ text: "TypeError: Cannot read properties of undefined (reading 'xyz')", url: "http://127.0.0.1:8765/cart.html", line: 3, column: 9 }] });
+  assert.deepEqual(await hunt(page), [["/cart.html throws TypeError: Cannot read properties of undefined (reading 'xyz')", "high"]]);
+});
+
+test("bug-hunt reports a page that logs a console error, as errors does (#111)", async () => {
+  const page = await quietPage({ messages: [{ type: "error", text: "cart total is NaN" }, { type: "log", text: "cart ready" }] });
+  assert.deepEqual(await hunt(page), [["/cart.html logs cart total is NaN", "high"]]);
+});
+
+test("a page no app served, about:blank before the first open, is not judged (#115)", async () => {
+  const run = async (args) =>
+    ({
+      "snapshot -i": { origin: "about:blank", snapshot: "" },
+      "get title": { title: "" },
+      console: { messages: [] },
+      errors: { errors: [] },
+      "network requests": { requests: [] },
+    })[args.join(" ")];
+  const blank = await observe(driven({ run }));
+  const jev = replay();
+  const inferences = await judge(policy, blank, { content: "" }, jev);
+  const applied = applyPolicy(policy, blank, { content: "", inferences });
+  const { findings } = await judgeFindings(policy, blank, { content: "" }, applied, jev);
+  assert.deepEqual([findings, jev.calls.length], [[], 0]);
+});
+
 // A title says what the user can see happening. What made it happen is the reader's job, not Jev's.
 const CAUSAL = [/because/i, /due to/i, /caused by/i, /bug in/i];
 
@@ -200,6 +259,6 @@ test("every title of every shipped policy names a behaviour and none names a cau
   const titles = policies.flatMap((policy) =>
     policy.rules.map((rule) => rule.title.filter((part) => typeof part === "string").join(" ")),
   );
-  assert.equal(titles.length, 10);
+  assert.equal(titles.length, 12);
   for (const title of titles) for (const cause of CAUSAL) assert.doesNotMatch(title, cause);
 });

@@ -31,6 +31,8 @@ export interface Reproduction {
   recording?: string;
   console?: string[];
   errors?: string[];
+  /** Why the replay left no evidence, when it failed on its own: a recording ffmpeg could not write, say. */
+  evidenceMissing?: string;
 }
 
 export interface ReproInput {
@@ -116,8 +118,11 @@ export async function reproduce(input: ReproInput): Promise<Reproduction> {
       errors: landed.errors.map((error) => error.text),
     };
   } finally {
-    await browser.stopRecording();
-    await browser.closeTab();
-    await files.admit(recording);
+    try {
+      await browser.stopRecording();
+    } finally {
+      await browser.closeTab();
+      await files.admit(recording);
+    }
   }
 }

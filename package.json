@@ -1,6 +1,6 @@
 {
   "name": "soab",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Drives a browser from one goal or one policy",
   "type": "module",
   "license": "Apache-2.0",
