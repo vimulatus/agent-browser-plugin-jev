@@ -112,7 +112,7 @@ test("each value question names its own field, and the chosen field's answer is 
   const decision = await decide(input(password));
   assert.equal(decision.target, "2");
   assert.equal(decision.value, "secret");
-  assert.equal(decision.valueProbability, 0.84);
+  assert.ok(Math.abs(decision.valueProbability - 0.89) < 1e-9, "secret takes the mass of \"password secret\" around it");
 });
 
 test("a password field is offered and marked, and its value never reaches the request", async () => {
