@@ -121,24 +121,29 @@ function blockedByGate(decision: Decision, allow: Allow): string | null {
   return null;
 }
 
-/**
- * Why the run cannot act on this decision, or null when it can: the goal holds no value for the field, or Jev
- * sees no move, which is what it answers on a login page when the goal has no value to type at all.
- */
-function stalledOn(decision: Decision): string | null {
-  if (decision.operation === "BLOCKED") return "no supported operation can make progress";
-  if (decision.operation !== "TYPE_TEXT") return null;
-  if (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD) {
-    return `the goal holds no value for ${decision.label}`;
-  }
-  return null;
-}
-
 /** The page the run last clicked on, as it read just before the click. */
 interface Clicked {
   label: string | null;
   url: string;
   content: string;
+}
+
+/**
+ * Why the run cannot act on this decision, or null when it can: the goal holds no value for the field, or Jev
+ * sees no move, which is what it answers on a login page when the goal has no value to type at all, and on a step
+ * that rejected what the run submitted.
+ */
+function stalledOn(decision: Decision, url: string, clicked: Clicked | null): string | null {
+  if (decision.operation === "BLOCKED") {
+    const stuckOn = clicked !== null && clicked.url === url;
+    const noMove = "no supported operation can make progress";
+    return stuckOn ? `${noMove}: the page did not move on after clicking ${clicked.label}` : noMove;
+  }
+  if (decision.operation !== "TYPE_TEXT") return null;
+  if (decision.value === null || (decision.valueProbability ?? 0) <= THRESHOLD) {
+    return `the goal holds no value for ${decision.label}`;
+  }
+  return null;
 }
 
 /**
@@ -391,7 +396,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         model: decision.model,
       };
 
-      const stalled = stalledOn(decision);
+      const stalled = stalledOn(decision, observation.url, clicked);
       if (stalled !== null) {
         if (!options.handoff || !loginPage(observation)) {
           reason = step.reason = stalled;

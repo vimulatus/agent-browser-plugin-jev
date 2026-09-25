@@ -104,6 +104,14 @@ test("a DONE on a page that still shows the code step after Verify ends blocked,
   assert.equal(done.reason, result.reason);
 });
 
+test("a BLOCKED on the step that rejected the submit says the page did not move on", async (t) => {
+  const { result, out } = await drive("otp-rejected");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "no supported operation can make progress: the page did not move on after clicking Verify");
+});
+
 test("a DONE right after a click that left the page as it was ends blocked, whatever Jev judged", async (t) => {
   const { result, out } = await drive("otp-still");
   t.after(() => rmSync(out, { recursive: true, force: true }));
