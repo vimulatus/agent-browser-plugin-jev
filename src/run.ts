@@ -25,7 +25,10 @@ import { valueSpans } from "./spans.js";
 import { stopwatch } from "./stopwatch.js";
 
 export const DEFAULT_MAX_STEPS = 60;
-/** This many acts in a row that leave the page unchanged mean the run cannot progress. */
+/**
+ * This many steps in a row that leave the page unchanged mean the run cannot progress. A WAIT counts like any act:
+ * it waits for the network to go quiet, so a tree unchanged after it is no more likely to change on the next one.
+ */
 const STUCK = 3;
 /** What a run logs in place of a value it typed into a field that hides what it holds. */
 export const MASK = "•••";
@@ -108,15 +111,18 @@ export function defaultDeps(options: RunOptions): Deps {
   };
 }
 
-function stuck(history: Step[]): boolean {
+/** Why the run is stuck, or null: the last `STUCK` steps all left the page as it was. A change starts the count again. */
+function stuck(history: Step[]): string | null {
   const last = history.slice(-STUCK);
-  return last.length === STUCK && last.every((s) => s.pageChanged === false && s.operation !== "WAIT");
+  if (last.length < STUCK || !last.every((s) => s.pageChanged === false)) return null;
+  if (last.every((s) => s.operation === "WAIT")) return `the page did not change after ${STUCK} WAITs in a row`;
+  return `${STUCK} actions in a row left the page unchanged`;
 }
 
-function blockedByGate(decision: Decision, allow: Allow): string | null {
-  const gate = decision.destructive;
-  if (gate === null || gate.probability <= THRESHOLD) return null;
-  const verb = gate.verb ?? "change";
+/** Why an irreversible control may not be activated, or null when it may. Shared by the goal run and the walk. */
+export function refused(destructive: Decision["destructive"], allow: Allow): string | null {
+  if (destructive === null || destructive.probability <= THRESHOLD) return null;
+  const verb = destructive.verb ?? "change";
   if (allow !== "all" && !allow.has(verb)) return `${verb} is destructive and not in --allow`;
   return null;
 }
@@ -358,8 +364,9 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       if (last !== undefined && last.pageChanged === null) {
         last.pageChanged = observation.hash !== last.hash;
       }
-      if (stuck(history)) {
-        reason = `${STUCK} actions in a row left the page unchanged`;
+      const unchanged = stuck(history);
+      if (unchanged !== null) {
+        reason = unchanged;
         break;
       }
       await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
@@ -411,11 +418,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         await write("running", step);
         continue;
       }
-      const denied = blockedByGate(decision, options.allow);
+      const denied = refused(decision.destructive, options.allow);
       if (denied !== null) {
-        step.reason = denied;
+        reason = step.reason = `${denied}: did not click ${decision.label}`;
         await write("running", step);
-        continue;
+        break;
       }
       if ((await snapshotHash(browser)) !== observation.hash) {
         step.reason = "the page changed between the decision and the act";

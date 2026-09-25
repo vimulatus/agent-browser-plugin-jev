@@ -1,0 +1,162 @@
+{
+  "goal": "show the orders list",
+  "pages": "loading",
+  "responses": [
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "WAIT",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.9,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "WAIT",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.9,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "WAIT",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.9,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "WAIT",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.9,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "WAIT",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.9,
+            "DONE": 0.02,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.05
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    },
+    {
+      "model": "jev-latest",
+      "answers": {
+        "operation": {
+          "type": "choice",
+          "choice": "DONE",
+          "probabilities": {
+            "CLICK": 0.02,
+            "SCROLL_UP": 0.02,
+            "SCROLL_DOWN": 0.02,
+            "WAIT": 0.02,
+            "DONE": 0.9,
+            "BLOCKED": 0.02
+          },
+          "confidence": 0.9
+        },
+        "goal_outcome_visible": {
+          "type": "noul",
+          "noul": 0.92
+        }
+      },
+      "usage": {
+        "input_tokens": 600,
+        "output_tokens": 20
+      }
+    }
+  ]
+}
