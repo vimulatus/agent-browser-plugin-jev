@@ -4,6 +4,7 @@ import { openBrowser } from "./browser.js";
 import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { run, type RunOptions } from "./run.js";
+import { parseResumeArgs, resumeOptions } from "./resume.js";
 import { stopSession } from "./runs.js";
 import { tail } from "./tail.js";
 import { discoverScopes, init } from "./scope.js";
@@ -67,6 +68,14 @@ async function main(argv: string[]): Promise<number> {
     );
     process.stdout.write(`${JSON.stringify(stopped)}\n`);
     return 0;
+  }
+  if (argv[0] === "resume") {
+    const options = resumeOptions(discoverScopes(), parseResumeArgs(argv.slice(1)));
+    process.stderr.write(`${NAME}: writing to ${options.out}\n`);
+    stopOnSignals(options);
+    const result = await run(options);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    return EXIT[result.status];
   }
   if (argv[0] === "run") {
     const options = parseRunArgs(argv.slice(1));

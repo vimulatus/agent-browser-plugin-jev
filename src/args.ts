@@ -12,6 +12,7 @@ export const USAGE = `${NAME}
   ${NAME} init
   ${NAME} session reset <session>
   ${NAME} stop <session>
+  ${NAME} resume <session> [--value "<label>=<value>"]... [--allow <verbs>]
   ${NAME} tail <session> [--json]
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
@@ -21,6 +22,12 @@ session reset closes the agent-browser session of that name, deletes its runs an
 its sign-in from the active scope and the sign-in agent-browser saved for it, then
 prints { session, deleted } as JSON. deleted lists what it removed, empty when the
 session had no state.
+
+resume goes on from the session's last run, blocked or stopped, in the same open
+browser: it types each --value into the field of that label that blocker.fields
+names (a bare --value fills the only one), then runs on with the goal, --allow
+and the steps left, widened by its own --allow. It prints one JSON line and exits
+like run. --max-steps, --out, --quiet, --no-handoff and --record work as for run.
 
 tail prints the steps of the session's newest run as they land, one line each
 as a run prints them on stderr, until it ends; --json prints each step as JSON.
@@ -56,7 +63,7 @@ Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 
 export class UsageError extends Error {}
 
-function allowFrom(value: string): RunOptions["allow"] {
+export function allowFrom(value: string): RunOptions["allow"] {
   if (value === "all") return "all";
   const verbs = value.split(",").map((verb) => verb.trim()).filter(Boolean);
   for (const verb of verbs) {
@@ -65,13 +72,13 @@ function allowFrom(value: string): RunOptions["allow"] {
   return new Set(verbs);
 }
 
-function stepsFrom(value: string): number {
+export function stepsFrom(value: string): number {
   const steps = Number(value);
   if (!Number.isInteger(steps) || steps < 0) throw new UsageError("--max-steps takes a whole number of steps");
   return steps;
 }
 
-function loginTimeoutFrom(value: string): number {
+export function loginTimeoutFrom(value: string): number {
   const seconds = Number(value);
   if (!Number.isFinite(seconds) || seconds < 0) throw new UsageError("--login-timeout takes a number of seconds");
   return seconds * 1000;

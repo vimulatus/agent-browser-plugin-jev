@@ -145,6 +145,21 @@ A server error or a rate limit is named from the network, before Jev is asked an
 
 The kind costs no extra call: every step's request asks Jev a `blocker_kind` Choice beside the operation, and `inferred.jsonl` logs its probabilities as `blockerProbabilities`. The run reads it only when it ends blocked. A refused click is `permission` without asking. A field the goal holds no value for is `missing_value`, unless Jev judges the page a code or a sign-in step. Otherwise the kind is Jev's pick when it is over 0.5, and `unknown` when Jev is unsure or judges that nothing stops the goal.
 
+### Resume a blocked run
+
+A blocked run leaves the session's browser open on the page it stopped at, so a second command goes on from there with what the blocker asked for:
+
+```bash
+soab run "sign in and open my invoices" --url https://app.example.com --session checkout
+# exits 2: {"status":"blocked","blocker":{"kind":"otp","fields":[{"ref":"e25","label":"Verification Code"}],...}}
+soab resume checkout --value "Verification Code=482913"
+# exits 0: {"status":"done",...}
+```
+
+`soab resume <session>` reads the session's last run, which must have ended `blocked` or `stopped`, and goes on in the same browser from the page it ended on: no `--url`, no sign-in loaded, no restart. It types each `--value "<label>=<value>"` into the field of that label, as `blocker.fields` names it; a bare `--value <value>` fills the only field when there is one. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 with a message that names the problem. With no `--value` it looks at the page again and goes on: that covers a push approval and a retry after a 429. Then it runs the same loop as `run`, with the last run's goal, `--allow`, model and the steps it had left, and exits the same way: 0 done, 2 blocked, 3 stopped.
+
+Each value is logged as a step of its own, `given to resume`, and every value `resume` receives is masked in every file and on stdout, whatever the field. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. `--max-steps`, `--out`, `--quiet`, `--no-handoff`, `--login-timeout`, `--human` and `--record` work as they do for `run`.
+
 ### Signing in
 
 A run that cannot act on a page with a password field, because the goal holds no value for it or Jev sees no move, signs in instead of stopping. It tries two things, in this order:

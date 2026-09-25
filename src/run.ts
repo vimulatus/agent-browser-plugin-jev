@@ -57,6 +57,20 @@ export interface RunOptions {
   progress?: (line: string) => void;
   /** Aborted by Ctrl-C or SIGTERM: the run finishes the step it is on and ends `stopped`. */
   signal?: AbortSignal;
+  /** Set by `resume`: the run goes on in the session's open browser, from the page the last run ended on. */
+  resume?: Resume;
+}
+
+/** What `resume` hands the run it starts: the run it goes on from, a link to open, and the values to type first. */
+export interface Resume {
+  from: string;
+  open?: string;
+  values: { label: string; value: string }[];
+}
+
+/** The allow list as `status.json` keeps it, so `resume` can read it back. */
+export function allowList(allow: Allow): string[] | "all" {
+  return allow === "all" ? "all" : [...allow];
 }
 
 /** What `<out>/status.json` reports while the run is in flight and once it has ended. `login` means a window is open for the person to sign in. */
@@ -277,8 +291,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       status: state,
       goal: options.goal,
       policy: options.policy ?? null,
+      session: options.session,
       url: observation?.url ?? null,
       steps,
+      maxSteps: options.maxSteps,
+      allow: allowList(options.allow),
+      ...(options.resume === undefined ? {} : { resumedFrom: options.resume.from }),
       actions: history.length,
       findings: findings.length,
       findingsFile,
@@ -308,8 +326,13 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     const jev = deps.jev;
     browser = deps.browser;
 
-    await loadAuth(store, options.session, browser);
+    // A resumed run goes on in the browser the last run left open, which already holds its sign-in.
+    if (options.resume === undefined) await loadAuth(store, options.session, browser);
     if (options.url !== undefined) await browser.open(options.url);
+    if (options.resume?.open !== undefined) {
+      secrets.add(options.resume.open);
+      await browser.open(options.resume.open);
+    }
 
     /** Starts the recording on the file asked for, then on `<name>-2`, `<name>-3` after each handoff, which stops it. */
     const record = async () => {
@@ -393,6 +416,48 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       step.reason = "signed in by hand in a window";
       return true;
     };
+
+    /** Types each value `resume` was given into the field of that label, as a step of its own. Every one is masked. */
+    const typeGiven = async (values: Resume["values"]) => {
+      if (values.length === 0) return;
+      const page = await observe(deps.browser);
+      for (const { label, value } of values) {
+        const field = page.elements.find((element) => element.label === label && element.operations.includes("TYPE_TEXT"));
+        if (field === undefined) throw new Error(`the page has no field "${label}" to type the value into`);
+        secrets.add(value, label);
+        const boxes = await codeBoxes(deps.browser, page.elements, field.ref, value);
+        if (boxes === null) await deps.browser.act({ operation: "TYPE_TEXT", ref: field.ref, value });
+        for (const [at, box] of (boxes ?? []).entries()) {
+          await deps.browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: value[at] });
+          secrets.add("", box.label);
+        }
+        steps++;
+        const step: Step = {
+          step: steps,
+          hash: page.hash,
+          operation: "TYPE_TEXT",
+          target: field.index,
+          label,
+          value: MASK,
+          executed: true,
+          reason: "given to resume",
+          pageChanged: null,
+          confidence: 1,
+          probabilities: {},
+          targetProbabilities: {},
+          valueProbabilities: {},
+          destructive: null,
+          outcome: null,
+          blockerProbabilities: {},
+          latencyMs: 0,
+          usage: {},
+          model: options.model,
+        };
+        history.push(step);
+        await write("running", step);
+      }
+    };
+    await typeGiven(options.resume?.values ?? []);
 
     let previous: Previous | undefined;
     let clicked: Clicked | null = null;
