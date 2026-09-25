@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
@@ -58,7 +60,7 @@ test("run --policy errors --max-steps 0 prints those findings as JSON", () => {
     ["dist/main.js", "run", "--policy", "errors", "--max-steps", "0", "--session", "orders"],
     {
       encoding: "utf8",
-      env: { ...process.env, PATH: `${FAKE_BIN}:${process.env.PATH}`, JEV_FIXTURES: FIXTURES },
+      env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), "soab-home-")), PATH: `${FAKE_BIN}:${process.env.PATH}`, JEV_FIXTURES: FIXTURES },
     },
   );
   assert.equal(result.stderr, "");

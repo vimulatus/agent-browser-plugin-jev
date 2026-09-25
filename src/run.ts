@@ -1,6 +1,4 @@
 import { appendFile, mkdir, rename, writeFile } from "node:fs/promises";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { openBrowser, type Browser } from "./browser.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
@@ -95,11 +93,6 @@ interface Step {
   latencyMs: number;
   usage: Record<string, number>;
   model: string;
-}
-
-/** A fresh directory under the OS temp dir, named in the result, for the run's artifacts. */
-export function defaultOut(): string {
-  return mkdtempSync(join(tmpdir(), `${NAME}-run-`));
 }
 
 /** The real browser and the real model, from the session and `TYPESAFE_API_KEY`. */

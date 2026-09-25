@@ -22,7 +22,8 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --url <url>        Open this page before the first step
   --session <name>   agent-browser session; default $AGENT_BROWSER_SESSION
   --max-steps <n>    Stop after n steps; default ${DEFAULT_MAX_STEPS}
-  --out <dir>        Run artifacts; default a fresh directory under the temp dir
+  --out <dir>        Run artifacts; default ${STATE_DIR}/sessions/<session>/runs/<timestamp>/
+                     in the project scope, else in ~/${STATE_DIR}/
   --allow <verbs>    Let the run ${Object.keys(VERBS).join(", ")}; or all
   --model <name>     System One model; default ${DEFAULT_MODEL}
   --policy <file>    Judge every step against this policy, by path or by name:

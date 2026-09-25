@@ -79,7 +79,7 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 | `--url` | `<url>` | Opens this page before the first step |
 | `--session` | `<name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION` |
 | `--max-steps` | `<n>` | Stops after n steps; default 60. `0` judges the page and moves nothing |
-| `--out` | `<dir>` | Where the run writes its artifacts; default a fresh directory under the temp dir |
+| `--out` | `<dir>` | Where the run writes its artifacts; default a new `.soab/sessions/<session>/runs/<timestamp>/`, see [What a run writes](#what-a-run-writes) |
 | `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, comma separated, or `all` |
 | `--model` | `<name>` | The System One model; default `jev-latest` |
 | `--policy` | `<file>` | The policy to judge with, by path or by name: project, then global, then shipped |
@@ -260,7 +260,14 @@ Two lines go to stderr while the run is in flight:
 
 ## What a run writes
 
-Everything lands in `--out`, a fresh directory under the temp dir when you name none. The result and `status.json` both carry the path.
+Everything lands in `--out`. When you name none, every run, the walk and `--max-steps 0` included, gets a new directory under its session:
+
+```
+./.soab/sessions/<session>/runs/<timestamp>/     when ./.soab/ exists here or in a parent directory
+~/.soab/sessions/<session>/runs/<timestamp>/     otherwise
+```
+
+A second run of the same session adds a directory beside the first, and the names sort in the order the runs started. `soab init` keeps `.soab/sessions/` out of git. The result and `status.json` both carry the path.
 
 | File | What is in it |
 |---|---|

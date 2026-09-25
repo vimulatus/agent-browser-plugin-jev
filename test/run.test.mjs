@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { defaultOut, run } from "../dist/run.js";
+import { run } from "../dist/run.js";
+import { newRunDir } from "../dist/session.js";
 import { isolatedScopes, lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
@@ -12,7 +13,7 @@ function options(goal, overrides = {}) {
     goal,
     session: "jev-test",
     maxSteps: 60,
-    out: defaultOut(),
+    out: newRunDir(isolatedScopes(), "jev-test"),
     allow: new Set(),
     model: "jev-latest",
     human: false,

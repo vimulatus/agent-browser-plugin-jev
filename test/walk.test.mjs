@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { defaultOut } from "../dist/run.js";
+import { newRunDir } from "../dist/session.js";
 import { actionsBefore, walk } from "../dist/walk.js";
 import { driven, isolatedScopes, lines, replayingJev } from "./helpers.mjs";
 
@@ -98,7 +98,7 @@ async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
     goal: "",
     session: "jev-test",
     maxSteps: 30,
-    out: defaultOut(),
+    out: newRunDir(isolatedScopes(), "jev-test"),
     allow: "all",
     model: "jev-latest",
     human: false,

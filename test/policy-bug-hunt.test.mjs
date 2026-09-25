@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
 import { driven, isolatedScopes } from "./helpers.mjs";
@@ -178,6 +178,17 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
       ["severity", 1],
     ],
   );
+});
+
+test("with no --out, --max-steps 0 writes its answers under the session, like every other run", async () => {
+  process.env.PATH = `${FAKE_BIN}:${process.env.PATH}`;
+  process.env.JEV_FIXTURES = FIXTURES;
+  const scopes = isolatedScopes();
+  const jev = replay(RECORDED.page_only, RECORDED.page_only_findings);
+
+  const result = await judgePage({ session: "bug-hunt", policyPath: "bug-hunt", jev, scopes });
+
+  assert.equal(dirname(dirname(result.inferred)), join(scopes.global.dir, "sessions", "bug-hunt", "runs"));
 });
 
 // A title says what the user can see happening. What made it happen is the reader's job, not Jev's.
