@@ -134,20 +134,24 @@ function stalledOn(decision: Decision): string | null {
   return null;
 }
 
+/** The page the run last clicked on, as it read just before the click. */
+interface Clicked {
+  label: string | null;
+  url: string;
+  content: string;
+}
+
 /**
  * Why a DONE does not end the run done, or null when it does. Filled fields and a clicked submit are not the goal's
- * outcome, so the page did not move on when the last click and every act after it left the page as it was, or when
- * Jev judges the page does not show the outcome.
+ * outcome: the page did not move on when it reads exactly as it did before the last click, or when Jev judges it
+ * does not show the outcome. A DONE Jev is unsure of does not end the run done either.
  */
-function notDone(decision: Decision, history: Step[]): string | null {
-  const at = history.map((step) => step.operation).lastIndexOf("CLICK");
-  const clicked = at === -1 ? null : history[at];
-  if (clicked !== null && history.slice(at).every((step) => step.pageChanged === false)) {
-    return `the page did not move on after clicking ${clicked.label}`;
-  }
-  if ((decision.outcome ?? 0) > THRESHOLD) return null;
-  if (clicked === null) return "the page does not show the goal's outcome";
-  return `the page did not move on after clicking ${clicked.label}: it does not show the goal's outcome`;
+function notDone(decision: Decision, url: string, content: string, clicked: Clicked | null): string | null {
+  const after = clicked === null ? "" : ` after clicking ${clicked.label}`;
+  if (clicked !== null && clicked.url === url && clicked.content === content) return `the page did not move on${after}`;
+  if ((decision.outcome ?? 0) <= THRESHOLD) return `the page did not move on${after}: it does not show the goal's outcome`;
+  if (decision.confidence <= THRESHOLD) return `DONE at ${decision.confidence.toFixed(2)} is too unsure to call the goal met`;
+  return null;
 }
 
 function logged(decision: Decision): string | null {
@@ -276,11 +280,14 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
      * A page condition outlives the act that revealed it, so the same title on a later step is that finding
      * seen again rather than a second one.
      */
-    const inspect = async (rules: Policy, page: Observation, previous: Previous | undefined, step: number) => {
-      const gathered: Gathered = {
-        previous,
-        content: rules.collect.includes("content") ? await readContent(deps.browser) : undefined,
-      };
+    const inspect = async (
+      rules: Policy,
+      page: Observation,
+      content: string,
+      previous: Previous | undefined,
+      step: number,
+    ) => {
+      const gathered: Gathered = { previous, content: rules.collect.includes("content") ? content : undefined };
       const inferences = await judge(rules, page, gathered, deps.policyJev);
       const applied = applyPolicy(rules, page, { ...gathered, inferences });
       const judged = await judgeFindings(rules, page, gathered, applied, deps.policyJev);
@@ -335,6 +342,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     };
 
     let previous: Previous | undefined;
+    let clicked: Clicked | null = null;
     while (steps < options.maxSteps) {
       observation = await observe(browser);
       origins.add(new URL(observation.url).origin);
@@ -347,7 +355,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         break;
       }
       await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
-      if (policy !== null) await inspect(policy, observation, previous, steps + 1);
+      const content = await readContent(browser);
+      if (policy !== null) await inspect(policy, observation, content, previous, steps + 1);
       previous = undefined;
 
       const decision = await decide({
@@ -356,6 +365,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         goal: options.goal,
         spans,
         observation,
+        content,
         recent: recent(history),
         allow: options.allow,
       });
@@ -405,7 +415,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         continue;
       }
       if (decision.operation === "DONE") {
-        const unmet = notDone(decision, history);
+        const unmet = notDone(decision, observation.url, content, clicked);
         if (unmet === null) status = "done";
         reason = step.reason = unmet ?? "every requirement is visibly satisfied";
         await write("running", step);
@@ -421,6 +431,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       }
       step.executed = true;
       previous = actedOn(decision, observation.hash);
+      if (decision.operation === "CLICK") clicked = { label: decision.label, url: observation.url, content };
       history.push(step);
       await write("running", step);
     }

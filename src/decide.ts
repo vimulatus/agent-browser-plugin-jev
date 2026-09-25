@@ -113,6 +113,8 @@ export interface DecideInput {
   goal: string;
   spans: string[];
   observation: Observation;
+  /** The whole page as Jev reads it: the interactive tree leaves out the alerts and messages that show an outcome. */
+  content: string;
   recent: Recent[];
   allow: Allow;
 }
@@ -171,7 +173,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
     model: input.model,
     state: {
       goal,
-      page: { url: observation.url, title: observation.title, text: observation.text },
+      page: { url: observation.url, title: observation.title, text: input.content },
       elements: observation.elements,
       recent_actions: input.recent.slice(-10),
     },

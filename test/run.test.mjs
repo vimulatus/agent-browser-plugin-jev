@@ -7,7 +7,7 @@ import { newRunDir } from "../dist/session.js";
 import { activeScope } from "../dist/scope.js";
 import { isolatedScopes, lines, pages, replay, replayingJev, SAVED_STATE, scriptedBrowser } from "./helpers.mjs";
 
-const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
+const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
 
 function options(goal, overrides = {}) {
   return {
@@ -88,8 +88,10 @@ test("a goal walk types from the goal, clicks through and lands done", async (t)
 });
 
 test("a DONE on a page that still shows the code step after Verify ends blocked, not done (#74)", async (t) => {
-  const { result, browser, out } = await drive("otp-wrong");
+  const { result, browser, jev, out } = await drive("otp-wrong");
   t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.match(jev.requests[2].state.page.text, /Invalid code/, "Jev reads the alert the interactive tree leaves out");
 
   assert.equal(result.status, "blocked");
   assert.equal(result.url, "http://127.0.0.1:8765/verify-otp.html");
@@ -120,6 +122,14 @@ test("a goal whose outcome shows on the same page ends done once it shows", asyn
   assert.equal(result.reason, "every requirement is visibly satisfied");
   assert.deepEqual(acts(browser), ["fill @e2 Ada", "click @e3", "state save <file>"]);
   assert.ok(jev.requests.every((request) => request.questions.goal_outcome_visible.type === "noul"));
+});
+
+test("a DONE Jev is unsure of ends blocked, even on a page that shows the outcome", async (t) => {
+  const { result, out } = await drive("unsure-done");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "DONE at 0.40 is too unsure to call the goal met");
 });
 
 test("a goal run without a policy judges nothing and writes no findings", async (t) => {

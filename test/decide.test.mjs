@@ -33,6 +33,7 @@ function input(jev, overrides = {}) {
     goal: GOAL,
     spans: valueSpans(GOAL),
     observation: observation(LOGIN),
+    content: LOGIN,
     recent: [],
     allow: new Set(),
     ...overrides,
