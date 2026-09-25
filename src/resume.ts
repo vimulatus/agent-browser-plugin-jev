@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { allowFrom, loginTimeoutFrom, stepsFrom, UsageError } from "./args.js";
 import type { Blocker } from "./blocker.js";
@@ -36,9 +37,24 @@ export function givenFrom(text: string): Given {
   return at <= 0 ? { label: null, value: text } : { label: text.slice(0, at), value: text.slice(at + 1) };
 }
 
-export function parseResumeArgs(argv: string[]): ResumeArgs {
+/** `--value-env "<label>=<VAR>"`: the value is the variable's, so it stays out of shell history and the process list. */
+function fromEnv(text: string, env: NodeJS.ProcessEnv): Given {
+  const { label, value: name } = givenFrom(text);
+  const value = env[name];
+  if (value === undefined || value === "") throw new UsageError(`--value-env: the environment variable ${name} is not set`);
+  return { label, value };
+}
+
+/** `--value-file "<label>=<path>"`: the value is the file's contents, trimmed. */
+function fromFile(text: string): Given {
+  const { label, value: path } = givenFrom(text);
+  if (!existsSync(path)) throw new UsageError(`--value-file: no file at ${path}`);
+  return { label, value: readFileSync(path, "utf8").trim() };
+}
+
+export function parseResumeArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): ResumeArgs {
   const args: ResumeArgs = {
-    session: process.env.AGENT_BROWSER_SESSION ?? "",
+    session: env.AGENT_BROWSER_SESSION ?? "",
     given: [],
     allow: new Set(),
     quiet: false,
@@ -62,6 +78,8 @@ export function parseResumeArgs(argv: string[]): ResumeArgs {
       const value = argv[++i];
       if (value === undefined) throw new UsageError(`${flag} needs a value`);
       if (flag === "--value") args.given.push(givenFrom(value));
+      else if (flag === "--value-env") args.given.push(fromEnv(value, env));
+      else if (flag === "--value-file") args.given.push(fromFile(value));
       else if (flag === "--allow") args.allow = allowFrom(value);
       else if (flag === "--open") args.open = value;
       else if (flag === "--max-steps") args.maxSteps = stepsFrom(value);

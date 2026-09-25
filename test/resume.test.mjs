@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../dist/run.js";
 import { parseResumeArgs, resumeOptions } from "../dist/resume.js";
@@ -105,4 +106,32 @@ test("resume --open follows a magic link in the session's browser, ends done, an
     assert.doesNotMatch(readFileSync(join(options.out, file), "utf8"), /s3cr3t-magic-token/, `${file} holds the link`);
   }
   assert.doesNotMatch(JSON.stringify(result), /s3cr3t-magic-token/);
+});
+
+test("resume takes a value from an env var or a file, types it and ends done, masked everywhere (#93)", async (t) => {
+  const file = join(mkdtempSync(join(tmpdir(), "soab-code-")), "code.txt");
+  writeFileSync(file, "482913\n");
+  for (const argv of [["--value-env", "One-time code=LAB_CODE"], ["--value-file", `One-time code=${file}`], ["--value-env", "LAB_CODE"]]) {
+    const { scopes } = await blockedOnCode(t);
+    process.env.LAB_CODE = "482913";
+    try {
+      const { result, acts, options } = await resume(t, scopes, argv, lab("otp-single", "otp-single-typed", "home"), [
+        { operation: "CLICK", target: "2" },
+        { operation: "DONE" },
+      ]);
+      assert.equal(acts[0], "fill @e2 482913", argv.join(" "));
+      assert.equal(result.status, "done");
+      for (const name of ["status.json", "inferred.jsonl", "observed.jsonl"]) {
+        assert.doesNotMatch(readFileSync(join(options.out, name), "utf8"), /482913/);
+      }
+      assert.doesNotMatch(JSON.stringify(result), /482913/);
+    } finally {
+      delete process.env.LAB_CODE;
+    }
+  }
+});
+
+test("an unset variable or a missing file is refused by name, and no value is printed (#93)", () => {
+  assert.throws(() => parseResumeArgs(["lab", "--value-env", "Code=NOT_SET_ANYWHERE"], {}), /environment variable NOT_SET_ANYWHERE is not set/);
+  assert.throws(() => parseResumeArgs(["lab", "--value-file", "Code=/nowhere/code.txt"], {}), /no file at \/nowhere\/code.txt/);
 });

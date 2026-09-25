@@ -13,6 +13,7 @@ export const USAGE = `${NAME}
   ${NAME} session reset <session>
   ${NAME} stop <session>
   ${NAME} resume <session> [--value "<label>=<value>"]... [--allow <verbs>] [--open <url>]
+                  [--value-env "<label>=<VAR>"]... [--value-file "<label>=<path>"]...
   ${NAME} tail <session> [--json]
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
@@ -27,7 +28,8 @@ resume goes on from the session's last run, blocked or stopped, in the same open
 browser: it types each --value into the field of that label that blocker.fields
 names (a bare --value fills the only one), then runs on with the goal, --allow
 and the steps left, widened by its own --allow. --open opens a sign-in link in
-the session's browser first, masked like a value. It prints one JSON line and exits
+the session's browser first, masked like a value. --value-env and --value-file
+take a value from an environment variable or a file, out of shell history. It prints one JSON line and exits
 like run. --max-steps, --out, --quiet, --no-handoff and --record work as for run.
 
 tail prints the steps of the session's newest run as they land, one line each
