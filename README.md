@@ -87,7 +87,7 @@ soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped, see [Stop a run](#stop-a-run). `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -184,7 +184,7 @@ With a policy and no goal, `run` walks the app on its own: it tries every contro
 soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
+It prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` as JSON, and exits 0 when it ends `done`, 3 when it was stopped. `findingsFile` is the absolute path of `findings.json`, so an agent opens it without knowing the layout of `out`.
 
 Each step is one Jev request of its own: `next_element`, a Choice over the controls on this page the walk has not tried yet; a Choice per editable field for the fixture value that belongs in it; and `action_is_destructive` for whatever it picks. A page that leaves one untried control is taken without a question.
 
@@ -309,7 +309,15 @@ These lines go to stderr while the run is in flight; stdout stays the one JSON l
 | `step 4 · TYPE "Verification Code" ← ••• · 0.90` | After each step of a goal run or a walk: the act, its target, the value through the same mask as the run's files, and Jev's confidence. `--quiet` turns these off |
 | `soab: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
 
-`status` in `status.json` is `running`, `login`, `done`, `blocked` or `failed`.
+`status` in `status.json` is `running`, `login`, `done`, `blocked`, `stopped` or `failed`.
+
+### Stop a run
+
+```bash
+soab stop checkout
+```
+
+It asks the session's running run to stop, from any shell, through a `stop` file in the run's directory, and prints `{ session, out, stopping }`. Ctrl-C and SIGTERM do the same in the run's own shell; a second Ctrl-C exits at once. The run finishes the step it is on, saves the session's sign-in to `auth.json`, writes `status: "stopped"` with the step it reached, prints its one JSON line and exits 3. The browser stays open on the page, so `soab run --session checkout` with no `--url`, or `soab resume checkout`, goes on from there. `stop` on a session with no running run says so on stderr, prints `stopping: false`, and exits 0.
 
 ## What a run writes
 

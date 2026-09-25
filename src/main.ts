@@ -3,10 +3,30 @@ import { parseRunArgs, USAGE, UsageError } from "./args.js";
 import { openBrowser } from "./browser.js";
 import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
-import { run } from "./run.js";
+import { run, type RunOptions } from "./run.js";
+import { stopSession } from "./runs.js";
 import { discoverScopes, init } from "./scope.js";
 import { newRunDir, resetSession } from "./session.js";
 import { walk, type WalkOptions } from "./walk.js";
+
+/** The exit code of a run that ended: 0 done, 2 blocked, 3 stopped. */
+const EXIT = { done: 0, blocked: 2, stopped: 3 } as const;
+
+/**
+ * Ctrl-C and SIGTERM stop the run after the step it is on, so it ends `stopped` with its files and sign-in kept.
+ * A second Ctrl-C exits at once.
+ */
+function stopOnSignals(options: RunOptions): void {
+  const stop = new AbortController();
+  options.signal = stop.signal;
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => {
+      if (stop.signal.aborted) process.exit(130);
+      process.stderr.write(`${NAME}: stopping after this step\n`);
+      stop.abort(signal);
+    });
+  }
+}
 
 async function main(argv: string[]): Promise<number> {
   const judge = judgePageOptions(argv);
@@ -31,6 +51,15 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(`${JSON.stringify(reset)}\n`);
     return 0;
   }
+  if (argv[0] === "stop") {
+    if (argv.length !== 2) throw new UsageError("stop takes one session name");
+    const stopped = stopSession(discoverScopes(), argv[1]);
+    process.stderr.write(
+      stopped.stopping ? `${NAME}: asked the run in ${stopped.out} to stop\n` : `${NAME}: session ${argv[1]} has no running run\n`,
+    );
+    process.stdout.write(`${JSON.stringify(stopped)}\n`);
+    return 0;
+  }
   if (argv[0] === "run") {
     const options = parseRunArgs(argv.slice(1));
     if (options.goal === "" && options.policy === undefined) {
@@ -38,13 +67,10 @@ async function main(argv: string[]): Promise<number> {
     }
     if (options.out === "") options.out = newRunDir(discoverScopes(), options.session);
     process.stderr.write(`${NAME}: writing to ${options.out}\n`);
-    if (options.goal === "") {
-      process.stdout.write(`${JSON.stringify(await walk(options as WalkOptions))}\n`);
-      return 0;
-    }
-    const result = await run(options);
+    stopOnSignals(options);
+    const result = options.goal === "" ? await walk(options as WalkOptions) : await run(options);
     process.stdout.write(`${JSON.stringify(result)}\n`);
-    return result.status === "done" ? 0 : 2;
+    return EXIT[result.status];
   }
   if (argv.length > 0) throw new UsageError(`unknown command ${argv[0]}`);
   process.stderr.write(USAGE);

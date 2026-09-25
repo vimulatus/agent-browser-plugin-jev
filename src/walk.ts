@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadAuth } from "./auth.js";
+import { loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { openRun, StoreFull } from "./cap.js";
 import { chooseNext, type Chosen } from "./choose.js";
@@ -22,7 +22,7 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
-import { refused, type RunOptions, type RunStatus } from "./run.js";
+import { refused, stopAsked, type RunOptions, type RunStatus } from "./run.js";
 import { MASK } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
@@ -53,7 +53,7 @@ export interface WalkStep {
 }
 
 export interface WalkResult {
-  status: "done";
+  status: "done" | "stopped";
   url: string;
   steps: number;
   actions: number;
@@ -129,6 +129,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
   let steps = 0;
   let actions = 0;
   let reason = `reached --max-steps ${options.maxSteps}`;
+  let status: WalkResult["status"] = "done";
 
   const save = async (state: RunStatus) => {
     const last = state !== "running" && state !== "login";
@@ -227,6 +228,12 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     let jumped: Entry | null = null;
 
     while (steps < options.maxSteps) {
+      const stop = stopAsked(options);
+      if (stop !== null) {
+        status = "stopped";
+        reason = stop;
+        break;
+      }
       observation = await observe(browser);
       home ??= observation.url;
       origin ??= new URL(home).origin;
@@ -342,9 +349,10 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
     }
     if (replayed !== undefined) await replayed.close();
     observation ??= await observe(browser);
-    await save("done");
+    if (status === "stopped") await saveAuth(files.store, options.session, browser);
+    await save(status);
     return {
-      status: "done",
+      status,
       url: observation.url,
       steps,
       actions,

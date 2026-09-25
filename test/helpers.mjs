@@ -195,8 +195,7 @@ export function labRun(t, names, intents, goal, overrides = {}) {
   return labRunPages(t, lab(...names), intents, goal, overrides);
 }
 
-export async function labRunPages(t, pages, intents, goal, overrides = {}) {
-  const scopes = isolatedScopes();
+export async function labRunPages(t, pages, intents, goal, { scopes = isolatedScopes(), jev: given, ...overrides } = {}) {
   const options = {
     goal,
     session: "lab",
@@ -211,11 +210,11 @@ export async function labRunPages(t, pages, intents, goal, overrides = {}) {
   };
   t.after(() => rmSync(options.out, { recursive: true, force: true }));
   const browser = scriptedBrowser(pages);
-  const jev = scriptedJev(intents);
+  const jev = given ?? scriptedJev(intents);
   const policyJev = { ask: async () => assert.fail("no policy") };
   const result = await run(options, { browser, jev, policyJev, scopes });
   const status = JSON.parse(readFileSync(join(options.out, "status.json"), "utf8"));
   const acts = browser.state.calls.filter((call) => !LAB_READS.has(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
-  return { result, status, jev, acts, out: options.out };
+  return { result, status, jev, acts, browser, scopes, out: options.out };
 }
 

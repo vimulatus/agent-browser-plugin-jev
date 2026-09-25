@@ -25,6 +25,7 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { stepLine } from "./progress.js";
+import { STOP_FILE } from "./runs.js";
 import { MASK, Secrets } from "./secrets.js";
 import { valueSpans } from "./spans.js";
 import { stopwatch } from "./stopwatch.js";
@@ -53,13 +54,15 @@ export interface RunOptions {
   loginTimeoutMs: number;
   /** Where each step's line goes as it happens; the command sends it to stderr unless `--quiet`. */
   progress?: (line: string) => void;
+  /** Aborted by Ctrl-C or SIGTERM: the run finishes the step it is on and ends `stopped`. */
+  signal?: AbortSignal;
 }
 
 /** What `<out>/status.json` reports while the run is in flight and once it has ended. `login` means a window is open for the person to sign in. */
-export type RunStatus = "running" | "login" | "done" | "blocked" | "failed";
+export type RunStatus = "running" | "login" | "done" | "blocked" | "stopped" | "failed";
 
 export interface RunResult {
-  status: "done" | "blocked";
+  status: "done" | "blocked" | "stopped";
   url: string;
   steps: number;
   actions: number;
@@ -125,6 +128,13 @@ function stuck(history: Step[]): string | null {
   if (last.length < STUCK || !last.every((s) => s.pageChanged === false)) return null;
   if (last.every((s) => s.operation === "WAIT")) return `the page did not change after ${STUCK} WAITs in a row`;
   return `${STUCK} actions in a row left the page unchanged`;
+}
+
+/** Why the run must stop before its next step, or null: a signal in its own shell, or `soab stop` from another. */
+export function stopAsked(options: RunOptions): string | null {
+  if (options.signal?.aborted === true) return `stopped by ${String(options.signal.reason ?? "a signal")}`;
+  if (existsSync(join(options.out, STOP_FILE))) return `stopped by ${NAME} stop`;
+  return null;
 }
 
 /** Why an irreversible control may not be activated, or null when it may. Shared by the goal run and the walk. */
@@ -388,6 +398,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     let decided: Decision | null = null;
     let cause: Cause = null;
     while (steps < options.maxSteps) {
+      const stop = stopAsked(options);
+      if (stop !== null) {
+        status = "stopped";
+        reason = stop;
+        break;
+      }
       observation = await observe(browser);
       origins.add(new URL(observation.url).origin);
       const last = history.at(-1);
@@ -495,7 +511,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
 
     await stopRecording();
     // A blocked run does not save, so a login that timed out does not overwrite the session's last sign-in.
-    if (status === "done") await saveAuth(store, options.session, browser);
+    if (status === "done" || status === "stopped") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
     if (status === "blocked") blocker ??= blockerOf(reason ?? "", decided, cause);
     await scrubEarlier();

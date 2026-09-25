@@ -11,6 +11,7 @@ export const USAGE = `${NAME}
   ${NAME} run --policy <file> [options]
   ${NAME} init
   ${NAME} session reset <session>
+  ${NAME} stop <session>
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
 to .gitignore. It is the project scope; ~/${STATE_DIR}/ is the global one.
@@ -20,8 +21,13 @@ its sign-in from the active scope and the sign-in agent-browser saved for it, th
 prints { session, deleted } as JSON. deleted lists what it removed, empty when the
 session had no state.
 
+stop asks the session's running run to stop after the step it is on. Ctrl-C and
+SIGTERM do the same for a run in this shell. The run ends stopped, keeps its
+sign-in, leaves the browser open on the page, and exits 3.
+
 With a goal it drives the browser to it, one Jev request per step, and prints
-{ status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.
+{ status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked,
+3 when stopped.
 With a policy and no goal it walks the app from --url, trying every control
 once, and writes findings.json. --max-steps 0 judges the current page instead.
 
