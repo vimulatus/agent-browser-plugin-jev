@@ -22,7 +22,7 @@ import {
   type Jev as PolicyJev,
   type Previous,
 } from "./policy/index.js";
-import { reproduce } from "./repro.js";
+import { reproduce, type Reproduction } from "./repro.js";
 import { allowList, refused, stopAsked, type RunOptions, type RunStatus } from "./run.js";
 import { MASK, Secrets } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
@@ -255,22 +255,24 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
         await deps.browser.saveState(state);
         await files.admit(state);
         replayed = deps.repro;
-        Object.assign(
-          candidate,
-          await reproduce({
-            browser: deps.repro,
-            state,
-            files,
-            home: from,
-            number: findings.length,
-            actions: actionsBefore(options.out, candidate.step),
-            fixtures,
-            fires: async (replay, acted) => {
-              const { fired: again } = await firesOn(deps.repro, replay, acted);
-              return again.some((one) => one.title === candidate.title);
-            },
-          }),
-        );
+        // A replay that fails on its own, a recording ffmpeg cannot write say, costs the finding its evidence, not the walk.
+        const reproduction = await reproduce({
+          browser: deps.repro,
+          state,
+          files,
+          home: from,
+          number: findings.length,
+          actions: actionsBefore(options.out, candidate.step),
+          fixtures,
+          fires: async (replay, acted) => {
+            const { fired: again } = await firesOn(deps.repro, replay, acted);
+            return again.some((one) => one.title === candidate.title);
+          },
+        }).catch((error: unknown): Reproduction => {
+          if (error instanceof StoreFull) throw error;
+          return { reproduced: false, evidenceMissing: (error as Error).message };
+        });
+        Object.assign(candidate, reproduction);
         await save("running");
       }
     };
