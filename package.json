@@ -1,17 +1,16 @@
 {
-  "name": "agent-browser-plugin-jev",
-  "version": "0.2.0",
-  "description": "Jev drives a browser from one goal or one policy",
+  "name": "soab",
+  "version": "0.3.0",
+  "description": "Drives a browser from one goal or one policy",
   "type": "module",
   "license": "Apache-2.0",
-  "repository": "github:vimulatus/agent-browser-plugin-jev",
+  "repository": "github:vimulatus/soab",
   "packageManager": "pnpm@11.1.3",
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "jev": "./dist/main.js",
-    "agent-browser-plugin-jev": "./dist/main.js"
+    "soab": "./dist/main.js"
   },
   "files": [
     "dist",

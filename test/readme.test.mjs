@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { USAGE } from "../dist/args.js";
 import { COLLECTIONS } from "../dist/policy/load.js";
+import { NAME } from "../dist/name.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const readme = readFileSync(`${root}README.md`, "utf8");
@@ -53,7 +54,22 @@ test("SKILL.md carries the install, the policy grammar and both run forms", () =
   for (const collection of COLLECTIONS) {
     assert.ok(documents(skill, collection), `SKILL.md does not name collect: ${collection}`);
   }
-  for (const token of ["npm install -g agent-browser-plugin-jev", "--policy", "--max-steps", "findings.json"]) {
+  for (const token of [`npm install -g ${NAME}`, "--policy", "--max-steps", "findings.json"]) {
     assert.ok(skill.includes(token), `SKILL.md does not name ${token}`);
+  }
+});
+
+test("the docs name the old package only to say it is deprecated", () => {
+  for (const [file, text] of [["README.md", readme], ["SKILL.md", skill]]) {
+    for (const line of text.split("\n").filter((line) => line.includes("agent-browser-plugin-jev"))) {
+      assert.match(line, /deprecated/, `${file} still names agent-browser-plugin-jev: ${line}`);
+    }
+  }
+});
+
+test("the docs run the command by its name, never as jev", () => {
+  for (const [file, text] of [["README.md", readme], ["SKILL.md", skill]]) {
+    assert.ok(text.includes(`${NAME} run`), `${file} never runs ${NAME}`);
+    assert.doesNotMatch(text, /^jev\b|\bjev run\b|`jev`|jev: /m, `${file} still runs jev`);
   }
 });

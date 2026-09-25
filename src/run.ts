@@ -7,6 +7,7 @@ import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./dec
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { authProfileFor, handoff, loginPage } from "./login.js";
+import { NAME } from "./name.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -95,7 +96,7 @@ interface Step {
 
 /** A fresh directory under the OS temp dir, named in the result, for the run's artifacts. */
 export function defaultOut(): string {
-  return mkdtempSync(join(tmpdir(), "jev-run-"));
+  return mkdtempSync(join(tmpdir(), `${NAME}-run-`));
 }
 
 /** The real browser and the real model, from the session and `TYPESAFE_API_KEY`. */
@@ -304,7 +305,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         timeoutMs: options.loginTimeoutMs,
         opened: async () => {
           // The run blocks its caller, so the caller learns of the window from stderr, not from status.json.
-          process.stderr.write(`jev: sign in on the window at ${page.url}\n`);
+          process.stderr.write(`${NAME}: sign in on the window at ${page.url}\n`);
           await write("login");
         },
       });

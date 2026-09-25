@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { parseRunArgs, USAGE, UsageError } from "./args.js";
+import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { defaultOut, run } from "./run.js";
 import { walk, type WalkOptions } from "./walk.js";
@@ -16,7 +17,7 @@ async function main(argv: string[]): Promise<number> {
       throw new UsageError('run needs a goal or a policy: run "<goal>", or run --policy <file>');
     }
     if (options.out === "") options.out = defaultOut();
-    process.stderr.write(`jev: writing to ${options.out}\n`);
+    process.stderr.write(`${NAME}: writing to ${options.out}\n`);
     if (options.goal === "") {
       process.stdout.write(`${JSON.stringify(await walk(options as WalkOptions))}\n`);
       return 0;
