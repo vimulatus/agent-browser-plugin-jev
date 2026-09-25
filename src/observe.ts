@@ -6,7 +6,7 @@ export type { ConsoleMessage, PageError, Request };
 
 export const MAX_TEXT = 6000;
 
-/** Everything Jev sees of the page at one moment. `hash` changes when the url or the tree changes. */
+/** The page at one moment, from its interactive tree. `hash` changes when the url or the tree changes. */
 export interface Observation {
   url: string;
   title: string;

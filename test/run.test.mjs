@@ -132,6 +132,19 @@ test("a goal whose outcome shows on the same page ends done once it shows", asyn
   assert.ok(jev.requests.every((request) => request.questions.goal_outcome_visible.type === "noul"));
 });
 
+test("a DONE on the page a click led to, without the goal's outcome, ends blocked without saying it did not move on", async (t) => {
+  const responses = replay("login");
+  responses[3].answers.goal_outcome_visible.noul = 0.2;
+  const run_options = options("log in as alice@example.com with password secret and open Settings");
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages("login"));
+  const result = await run(run_options, { browser, jev: replayingJev(responses), scopes: isolatedScopes() });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.url, "http://127.0.0.1:8765/settings.html");
+  assert.equal(result.reason, "the page does not show the goal's outcome");
+});
+
 test("a DONE Jev is unsure of ends blocked, even on a page that shows the outcome", async (t) => {
   const { result, out } = await drive("unsure-done");
   t.after(() => rmSync(out, { recursive: true, force: true }));

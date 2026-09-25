@@ -152,9 +152,12 @@ function stalledOn(decision: Decision, url: string, clicked: Clicked | null): st
  * does not show the outcome. A DONE Jev is unsure of does not end the run done either.
  */
 function notDone(decision: Decision, url: string, content: string, clicked: Clicked | null): string | null {
-  const after = clicked === null ? "" : ` after clicking ${clicked.label}`;
-  if (clicked !== null && clicked.url === url && clicked.content === content) return `the page did not move on${after}`;
-  if ((decision.outcome ?? 0) <= THRESHOLD) return `the page did not move on${after}: it does not show the goal's outcome`;
+  const stayed = clicked !== null && clicked.url === url;
+  const noMove = `the page did not move on after clicking ${clicked?.label}`;
+  if (stayed && clicked.content === content) return noMove;
+  if ((decision.outcome ?? 0) <= THRESHOLD) {
+    return stayed ? `${noMove}: it does not show the goal's outcome` : "the page does not show the goal's outcome";
+  }
   if (decision.confidence <= THRESHOLD) return `DONE at ${decision.confidence.toFixed(2)} is too unsure to call the goal met`;
   return null;
 }
