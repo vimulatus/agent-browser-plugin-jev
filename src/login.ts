@@ -1,3 +1,4 @@
+import { withStateFile } from "./auth.js";
 import type { Browser } from "./browser.js";
 import type { Observation } from "./observe.js";
 import { parseSnapshot, type Element } from "./snapshot.js";
@@ -36,8 +37,8 @@ export interface Handoff {
   timeoutMs: number;
   /** Runs once the window is open, so the run can report `status: "login"`. */
   opened(): Promise<void>;
-  /** Runs once the person has landed, on the window they signed in on, so the run can save the sign-in. */
-  signedIn(): Promise<void>;
+  /** Runs once the person has landed, with the file their sign-in was saved to from the window, so the run can keep it. */
+  signedIn(state: string): Promise<void>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -63,23 +64,25 @@ async function landing({ browser, url, origins, timeoutMs }: Handoff): Promise<s
 }
 
 /**
- * Hands the login to the person: closes the headless browser, reopens the session in a window on the login page,
- * and polls the page until they are signed in. Then the window closes, which saves its cookies and storage under
- * the session, and the session reopens headless where they landed. On agent-browser 0.38.1 the first command after
- * that reopen relaunches a blank browser (#67), so the run saves the sign-in from the window, not after it.
- * Returns where the person landed, or null when the wait ran out and the window was closed.
+ * Hands the login to the person: closes the headless browser, opens a window on the login page, and polls the page
+ * until they are signed in. Then it saves the window's cookies and storage, closes it, and loads them into a headless
+ * browser on the page where they landed. A wait that runs out goes back the same way, to the login page.
+ * Returns where the person landed, or null when the wait ran out.
  */
 export async function handoff(input: Handoff): Promise<string | null> {
   const { browser, url } = input;
   await browser.close();
-  await browser.reopen(url, true);
+  await browser.openWindow(url);
   await input.opened();
   await settle(browser);
   const landed = await landing(input);
-  if (landed !== null) await input.signedIn();
-  await browser.close();
-  if (landed === null) return null;
-  await browser.reopen(landed, false);
-  await settle(browser);
-  return landed;
+  return withStateFile(async (state) => {
+    await browser.saveState(state);
+    if (landed !== null) await input.signedIn(state);
+    await browser.close();
+    await browser.loadState(state);
+    await browser.open(landed ?? url);
+    await settle(browser);
+    return landed;
+  });
 }
