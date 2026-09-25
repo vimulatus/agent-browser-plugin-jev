@@ -307,6 +307,60 @@ test("a value span under the threshold blocks the run with --no-handoff", async 
   assert.deepEqual(acts(browser), []);
 });
 
+/** Drives a recorded run under another goal, with Jev's answer to one value question on one step swapped. */
+async function driveVote(name, goal, step, key, probabilities) {
+  const scenario = JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8"));
+  const responses = replay(name);
+  const choice = Object.keys(probabilities).reduce((a, b) => (probabilities[b] > probabilities[a] ? b : a));
+  responses[step].answers[key] = { type: "choice", choice, probabilities, confidence: probabilities[choice] };
+  const run_options = options(goal, { handoff: false });
+  const browser = scriptedBrowser(pages(scenario.pages));
+  const result = await run(run_options, { browser, jev: replayingJev(responses), scopes: isolatedScopes() });
+  return { result, browser, out: run_options.out };
+}
+
+test("a code after 'with' is typed when Jev splits its vote between the code and the phrase around it (#76)", async (t) => {
+  const { browser, out } = await driveVote("otp-wrong", "sign in with one-time code 123456", 0, "type_text_value_1", {
+    "one-time code 123456": 0.17,
+    "one-time": 0.02,
+    code: 0.02,
+    123456: 0.42,
+    NONE: 0.37,
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(acts(browser)[0], "fill @e2 123456");
+  assert.equal(steps(out)[0].value, "123456");
+  assert.equal(steps(out)[0].valueProbabilities["123456"], 0.42, "the log keeps Jev's own answer");
+});
+
+test("a spaced value Jev ranks first is typed whole, not cut to the word inside it", async (t) => {
+  const { result, browser, out } = await driveVote("save-toast", "set the display name to Ada Lovelace and save", 0, "type_text_value_1", {
+    "Ada Lovelace": 0.45,
+    Ada: 0.25,
+    Lovelace: 0.1,
+    NONE: 0.2,
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(acts(browser)[0], "fill @e2 Ada Lovelace");
+});
+
+test("a goal with two values types each into its own field when one field's vote is split", async (t) => {
+  const { result, browser, out } = await driveVote("login", "log in as alice@example.com with password secret and open Settings", 1, "type_text_value_2", {
+    "alice@example.com": 0.02,
+    "password secret": 0.3,
+    password: 0.05,
+    secret: 0.43,
+    NONE: 0.2,
+  });
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.deepEqual(acts(browser).slice(0, 2), ["fill @e5 alice@example.com", "fill @e6 secret"]);
+});
+
 test("--url opens the start page before the first step", async (t) => {
   const { browser, out } = await drive("login", null, { url: "http://127.0.0.1:8765/login.html" });
   t.after(() => rmSync(out, { recursive: true, force: true }));

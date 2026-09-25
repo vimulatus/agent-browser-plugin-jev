@@ -62,3 +62,27 @@ export function valueSpans(goal: string): string[] {
   }
   return spans;
 }
+
+function within(outer: string[], inner: string[]): boolean {
+  for (let start = 0; start + inner.length <= outer.length; start++) {
+    if (inner.every((word, i) => outer[start + i] === word)) return true;
+  }
+  return false;
+}
+
+/**
+ * Jev's answer to a value question, with spans that overlap counted as one value: the span Jev scored highest
+ * takes the mass of every span whose words contain its words or sit inside them, so "one-time code 123456" and
+ * "123456" cannot split the vote under the threshold. Jev's own ranking picks the text typed, which keeps a spaced
+ * value like "Anna Smith" whole. The value is null when NONE outscores that merged mass.
+ */
+export function valueVote(probabilities: Record<string, number>): { value: string | null; probability: number } {
+  const none = probabilities[NO_VALUE];
+  const spans = Object.keys(probabilities).filter((span) => span !== NO_VALUE);
+  const top = spans.reduce((best, span) => (probabilities[span] > probabilities[best] ? span : best));
+  const topWords = words(top);
+  const merged = spans
+    .filter((span) => within(words(span), topWords) || within(topWords, words(span)))
+    .reduce((sum, span) => sum + probabilities[span], 0);
+  return merged > none ? { value: top, probability: merged } : { value: null, probability: none };
+}

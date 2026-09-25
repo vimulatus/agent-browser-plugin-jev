@@ -2,7 +2,7 @@ import { choiceOf, noulOf, type Criteria, type Jev, type Question, type Request 
 import type { Observation } from "./observe.js";
 import { DESTRUCTIVE, DESTRUCTIVE_VERB, NEXT_ACTION, OPERATION_LABELS, OUTCOME, TARGET, VALUE, VERBS } from "./questions.js";
 import type { Element, Operation as ElementOperation } from "./snapshot.js";
-import { NO_VALUE } from "./spans.js";
+import { NO_VALUE, valueVote } from "./spans.js";
 
 export type Operation = ElementOperation | "SCROLL_UP" | "SCROLL_DOWN" | "WAIT" | "DONE" | "BLOCKED";
 
@@ -216,10 +216,11 @@ export async function decide(input: DecideInput): Promise<Decision> {
     decision.password = target.element.password === true;
     if (target.option !== undefined) decision.value = target.option.value;
     if (operation === "TYPE_TEXT") {
-      const value = choiceOf(reply.answers, valueKey(picked.choice), [...spans, NO_VALUE]);
-      decision.valueProbability = value.probabilities[value.choice];
-      decision.valueProbabilities = value.probabilities;
-      decision.value = value.choice === NO_VALUE ? null : value.choice;
+      const { probabilities } = choiceOf(reply.answers, valueKey(picked.choice), [...spans, NO_VALUE]);
+      const vote = valueVote(probabilities);
+      decision.valueProbability = vote.probability;
+      decision.valueProbabilities = probabilities;
+      decision.value = vote.value;
     }
   }
 

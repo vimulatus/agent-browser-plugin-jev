@@ -49,8 +49,8 @@
           "choice": "secret",
           "probabilities": {
             "alice@example.com": 0.3,
-            "password secret": 0.1,
-            "password": 0.1,
+            "password secret": 0.02,
+            "password": 0.18,
             "secret": 0.45,
             "NONE": 0.05
           },
