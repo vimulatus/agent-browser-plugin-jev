@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Approve the sign-in</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- The phone "approves" 8 s after load, and the page goes to home.html. -->
+<h1>Approve the sign-in on your phone</h1>
+<p>We sent a notification to your phone. Tap Approve to finish signing in.</p>
+<p class="note">Waiting for approval…</p>
+<script>
+  setTimeout(() => (location.href = "home.html"), 8000);
+</script>
+</body>
+</html>

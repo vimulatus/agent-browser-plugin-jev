@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Verify it's you</title><link rel="stylesheet" href="site.css"><script src="otp.js"></script></head>
+<body>
+<!-- The correct code is 123456. Each box keeps one digit and focus does not move. -->
+<h1>Verify it's you</h1>
+<p>Enter the 6-digit code we sent to your phone.</p>
+<form id="otp">
+  <div class="boxes">
+    <input aria-label="Digit 1 of 6" inputmode="numeric" maxlength="1">
+    <input aria-label="Digit 2 of 6" inputmode="numeric" maxlength="1">
+    <input aria-label="Digit 3 of 6" inputmode="numeric" maxlength="1">
+    <input aria-label="Digit 4 of 6" inputmode="numeric" maxlength="1">
+    <input aria-label="Digit 5 of 6" inputmode="numeric" maxlength="1">
+    <input aria-label="Digit 6 of 6" inputmode="numeric" maxlength="1">
+  </div>
+  <p id="error" class="error" role="alert"></p>
+  <button type="submit">Verify</button>
+</form>
+<script>
+  otpBoxes(document.getElementById("otp"), {
+    advance: false,
+    onCode: (code) => {
+      if (code === "123456") location.href = "home.html";
+      else document.getElementById("error").textContent = "Invalid code";
+    },
+  });
+</script>
+</body>
+</html>

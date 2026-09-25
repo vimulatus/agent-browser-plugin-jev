@@ -351,6 +351,17 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 
 The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
 
+### Pages that block a run
+
+`test/site/` holds one static page per blocker a goal run can hit: one-time codes in five shapes, a magic link, a push approval, a form missing values, a captcha, a typed delete confirmation, a 500, a 429, an identifier-first login, and an article with a newsletter box as a control. Each page's source states the value it accepts. The replay tests do not use them. Serve them on a free port and run one:
+
+```bash
+node test/site/serve.mjs 8792
+soab run "sign in with one-time code 123456" --url http://127.0.0.1:8792/otp-single.html --session lab-otp --no-handoff --max-steps 6
+```
+
+`http://127.0.0.1:8792/` lists every page.
+
 ### A page for the perf policy
 
 `perf.yaml` has to tell a slow request the page needs from a slow request it does not. Save this outside the repo and run it:

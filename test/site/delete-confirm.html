@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Delete records</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- Delete works only when the box holds exactly DELETE. -->
+<h1>Delete 40 records</h1>
+<p>This cannot be undone.</p>
+<form id="confirm">
+  <label for="word">Type DELETE to remove 40 records</label>
+  <input id="word" type="text" autocomplete="off">
+  <p id="error" class="error" role="alert"></p>
+  <button type="submit">Delete</button>
+</form>
+<p id="done" role="status"></p>
+<script>
+  document.getElementById("confirm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (document.getElementById("word").value === "DELETE") {
+      document.getElementById("confirm").hidden = true;
+      document.getElementById("done").textContent = "40 records deleted";
+    } else {
+      document.getElementById("error").textContent = "Type DELETE to confirm";
+    }
+  });
+</script>
+</body>
+</html>
