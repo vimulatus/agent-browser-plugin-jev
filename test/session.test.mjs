@@ -20,12 +20,12 @@ function world() {
   return { home, cwd };
 }
 
-/** One `soab run` with no key: it writes `status.json` where it would run, and never opens the browser. */
+/** One `soab run` with no key and no proxy to add one: it writes `status.json` where it would run, and never opens the browser. */
 function runCommand({ home, cwd }, ...args) {
   const result = spawnSync("node", [MAIN, "run", ...args], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, HOME: home, TYPESAFE_API_KEY: "" },
+    env: { ...process.env, HOME: home, TYPESAFE_API_KEY: "", HTTPS_PROXY: "", https_proxy: "" },
   });
   const out = /writing to (.+)\n/.exec(result.stderr)?.[1];
   assert.ok(out, result.stderr);

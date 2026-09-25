@@ -1,13 +1,13 @@
 {
   "name": "soab",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Drives a browser from one goal or one policy",
   "type": "module",
   "license": "Apache-2.0",
   "repository": "github:vimulatus/soab",
   "packageManager": "pnpm@11.1.3",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.18.1"
   },
   "bin": {
     "soab": "./dist/main.js"
@@ -28,6 +28,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "undici": "7.29.1",
     "yaml": "2.9.1"
   }
 }
