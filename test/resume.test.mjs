@@ -92,3 +92,17 @@ test("resume --allow after a permission block makes the click the run refused, a
   assert.equal(result.status, "done");
   assert.deepEqual(status.allow, ["delete"], "the widened allow list is in the new run's status.json");
 });
+
+test("resume --open follows a magic link in the session's browser, ends done, and the link lands in no file (#91)", async (t) => {
+  const scopes = isolatedScopes();
+  await labRun(t, ["magic-link"], [{ operation: "CLICK", target: "1", kind: "sign_in" }], "open the home page", { scopes });
+  const link = "http://127.0.0.1:8792/auth/callback?token=s3cr3t-magic-token";
+  const opened = (args, state) => (args[0] === "open" ? 1 : state.index);
+  const { result, acts, options } = await resume(t, scopes, ["--open", link], lab("magic-link", "home"), [{ operation: "DONE" }], opened);
+  assert.deepEqual(acts, [`open ${link}`, "state save <file>"]);
+  assert.equal(result.status, "done");
+  for (const file of ["status.json", "inferred.jsonl", "observed.jsonl"]) {
+    assert.doesNotMatch(readFileSync(join(options.out, file), "utf8"), /s3cr3t-magic-token/, `${file} holds the link`);
+  }
+  assert.doesNotMatch(JSON.stringify(result), /s3cr3t-magic-token/);
+});
