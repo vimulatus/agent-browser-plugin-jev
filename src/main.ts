@@ -24,7 +24,9 @@ async function main(argv: string[]): Promise<number> {
     if (argv.length !== 3) throw new UsageError("session reset takes one session name");
     const reset = await resetSession(discoverScopes(), argv[2], openBrowser(argv[2]));
     process.stderr.write(
-      reset.deleted === null ? `${NAME}: session ${reset.session} had nothing to delete\n` : `${NAME}: deleted ${reset.deleted}\n`,
+      reset.deleted.length === 0
+        ? `${NAME}: session ${reset.session} had nothing to delete\n`
+        : `${NAME}: deleted ${reset.deleted.join(", ")}\n`,
     );
     process.stdout.write(`${JSON.stringify(reset)}\n`);
     return 0;

@@ -1,4 +1,7 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Act, AuthProfile, Browser, ConsoleMessage, PageError, Request } from "./browser.js";
 
@@ -123,5 +126,16 @@ export function agentBrowser(session: string, human = false, run: Run = agentBro
     // agent-browser 0.38.1 has no live switch between headed and headless, so each is a relaunch. `--restore` rides
     // only on these opens: on a browser launched without it, it relaunches the browser and drops what it held.
     reopen: (url, headed) => call("open", url, "--restore", session, ...(headed ? ["--headed"] : [])),
+    // `reopen` restores under the session's name, so agent-browser 0.38.1 saves to `<directory>/<session>-<session>.json`,
+    // `.json.enc` when AGENT_BROWSER_ENCRYPTION_KEY is set; `state list` names the directory with HOME and
+    // AGENT_BROWSER_NAMESPACE applied. `state clear <name>` deletes every session's file, so each file goes by exact path.
+    async forgetSaved() {
+      const { directory } = (await run(["state", "list"])) as { directory: string };
+      const saved = [`${session}-${session}.json`, `${session}-${session}.json.enc`]
+        .map((name) => join(directory, name))
+        .filter((path) => existsSync(path));
+      for (const path of saved) await rm(path);
+      return saved;
+    },
   };
 }

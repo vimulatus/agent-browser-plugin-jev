@@ -83,6 +83,8 @@ export interface Browser {
   close(): Promise<void>;
   /** Opens the closed browser on `url` with the session's cookies and storage, in a window when `headed`. */
   reopen(url: string, headed: boolean): Promise<void>;
+  /** Deletes the cookies and storage `close` saved for `reopen`, and returns the files it deleted. Call it after `close`. */
+  forgetSaved(): Promise<string[]>;
 }
 
 /**
