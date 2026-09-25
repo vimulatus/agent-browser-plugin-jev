@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { parseRunArgs, USAGE, UsageError } from "./args.js";
+import { openBrowser } from "./browser.js";
 import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { run } from "./run.js";
 import { discoverScopes, init } from "./scope.js";
-import { newRunDir } from "./session.js";
+import { newRunDir, resetSession } from "./session.js";
 import { walk, type WalkOptions } from "./walk.js";
 
 async function main(argv: string[]): Promise<number> {
@@ -16,6 +17,16 @@ async function main(argv: string[]): Promise<number> {
   if (argv[0] === "init") {
     if (argv.length > 1) throw new UsageError(`init takes no arguments, not "${argv[1]}"`);
     process.stdout.write(`${JSON.stringify(await init(process.cwd()))}\n`);
+    return 0;
+  }
+  if (argv[0] === "session") {
+    if (argv[1] !== "reset") throw new UsageError(`unknown session command ${argv[1] ?? "(none)"}: session reset <session>`);
+    if (argv.length !== 3) throw new UsageError("session reset takes one session name");
+    const reset = await resetSession(discoverScopes(), argv[2], openBrowser(argv[2]));
+    process.stderr.write(
+      reset.deleted === null ? `${NAME}: session ${reset.session} had nothing to delete\n` : `${NAME}: deleted ${reset.deleted}\n`,
+    );
+    process.stdout.write(`${JSON.stringify(reset)}\n`);
     return 0;
   }
   if (argv[0] === "run") {
