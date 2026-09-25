@@ -104,6 +104,8 @@ A run that cannot act on a page with a password field, because the goal holds no
 
 agent-browser 0.38.1 has no live switch between headed and headless, so each leg is a relaunch, and the cookies and storage cross it through `--restore <session>`: agent-browser saves them on close under `~/.agent-browser/sessions/<session>-<session>.json`, as plain JSON unless `AGENT_BROWSER_ENCRYPTION_KEY` is set. A recorded run stops the recording before the window and starts it again after, on a second file (`login.webm`, then `login-2.webm`); `recordings` in the result and in `status.json` names every file. A page that shows its login form and its app on the same URL is not detected as signed in, and the wait runs out.
 
+A session's sign-in carries to its next run. A goal run and a walk load `sessions/<session>/auth.json` from the store into the browser before its first step, when the file exists, so the second run of a session starts signed in and logs no login step. The run writes the file with agent-browser's `state save`: from the window, as soon as the person has signed in there, and again when a goal run ends `done`. A run that ends `blocked` leaves the file as it was. The file holds the session's cookies and storage as plain JSON, in `./.soab/` when the repo has one, else in `~/.soab/`, which `soab init` keeps out of git. It never lands in the run directory. After a window, agent-browser 0.38.1 goes on in a fresh browser that is signed out (#67), so a run that went through one may end blocked; the next run of the session starts signed in from the file.
+
 ### Recording
 
 ```bash
@@ -267,7 +269,7 @@ Everything lands in `--out`. When you name none, every run, the walk and `--max-
 ~/.soab/sessions/<session>/runs/<timestamp>/     otherwise
 ```
 
-A second run of the same session adds a directory beside the first, and the names sort in the order the runs started. `soab init` keeps `.soab/sessions/` out of git. The result and `status.json` both carry the path.
+A second run of the same session adds a directory beside the first, and the names sort in the order the runs started. The session's sign-in sits beside `runs/` as `auth.json`, see [Signing in](#signing-in). `soab init` keeps `.soab/sessions/` out of git. The result and `status.json` both carry the path.
 
 | File | What is in it |
 |---|---|
@@ -319,7 +321,8 @@ The test suite replays recorded Jev answers and never calls the paid API, so the
 | A walk tries every control | `run --policy bug-hunt --url .../login.html --allow all --max-steps 12` | Yes. Three frontier entries, all tried, one finding, stopped inside the budget |
 | A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
 | A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. `--input-mode human`, `record start --cursor` and `click --human` were checked against agent-browser 0.38.1 without Jev, and gave a playable VP8 `.webm` with a cursor that eases between targets |
-| A login handed to a window | `run "open the settings page" --url <a login page>`, then sign in on the window | No. The legs were checked against agent-browser 0.38.1 without Jev: `close`, `open <url> --restore <session> --headed`, `close`, `open <url> --restore <session>` came back with `restoreStatus: "loaded"` and the cookie set in the window, `state save` and `state load` carried a cookie and a localStorage key to a second session, and the first read after a relaunch threw `SecurityError` until a `wait --load` ran first. The poll that decides the person is signed in has not run against a real login page |
+| A login handed to a window | `run "open the settings page" --url <a login page>`, then sign in on the window | No. The legs were checked against agent-browser 0.38.1 without Jev: `close`, `open <url> --restore <session> --headed`, `close`, `open <url> --restore <session>` came back with `restoreStatus: "loaded"` and the cookie set in the window, `state save` and `state load` carried a cookie and a localStorage key to a second session, and the first read after a relaunch threw `SecurityError` until a `wait --load` ran first. The poll that decides the person is signed in has not run against a real login page. Rechecked for #59: the command after the headless `open --restore` launched a fresh browser on about:blank, signed out (#67) |
+| A sign-in carries to the next run | a goal run that signs in on a real login page, then a second run of the same `--session` | No. `state save` from a signed-in browser, then `state load` before the first `open` of a fresh session, were checked against agent-browser 0.38.1 without Jev, and carried a cookie and a localStorage key. No safe real login page was at hand, and a run with Jev in the loop needs a paid key |
 
 The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents, not recorded from a paid call. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.
 
