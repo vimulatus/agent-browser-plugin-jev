@@ -22,7 +22,8 @@ import {
   type Previous,
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
-import { MASK, refused, type RunOptions, type RunStatus } from "./run.js";
+import { refused, type RunOptions, type RunStatus } from "./run.js";
+import { MASK } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stopwatch } from "./stopwatch.js";

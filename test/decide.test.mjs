@@ -54,6 +54,7 @@ test("one request offers the operation, a target per operation, a value per fiel
     "blocker_kind",
     "click_target",
     "destructive_verb",
+    "field_is_secret",
     "goal_outcome_visible",
     "operation",
     "type_text_target",
@@ -140,6 +141,7 @@ test("--allow all leaves the destructive questions out of the request", async ()
   assert.deepEqual(Object.keys(jev.requests[0].questions).sort(), [
     "blocker_kind",
     "click_target",
+    "field_is_secret",
     "goal_outcome_visible",
     "operation",
     "type_text_target",

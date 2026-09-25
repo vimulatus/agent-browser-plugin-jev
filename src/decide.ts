@@ -8,6 +8,7 @@ import {
   NEXT_ACTION,
   OPERATION_LABELS,
   OUTCOME,
+  SECRET,
   TARGET,
   VALUE,
   VERBS,
@@ -45,6 +46,8 @@ export interface Decision {
   valueProbability: number | null;
   valueProbabilities: Record<string, number>;
   password: boolean;
+  /** The field takes a secret: a password field, or one Jev judges takes a code, a card or an ID. Its value is masked in every file. */
+  secret: boolean;
   destructive: { probability: number; verb: string | null } | null;
   /** On a DONE, how likely Jev judges the page to show the goal's outcome; null on any other operation. */
   outcome: number | null;
@@ -194,6 +197,13 @@ export async function decide(input: DecideInput): Promise<Decision> {
     ...Object.fromEntries(spans.map((span) => [span, null])),
     [NO_VALUE]: "No span of the goal belongs in that field.",
   };
+  if (byOperation.has("TYPE_TEXT")) {
+    questions.field_is_secret = {
+      type: "noul",
+      instructions: { rules: SECRET },
+      criteria: { true: "The field takes a secret.", false: "The field takes an ordinary value." },
+    };
+  }
   for (const [index, target] of byOperation.get("TYPE_TEXT") ?? []) {
     questions[valueKey(index)] = {
       type: "choice",
@@ -239,6 +249,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
     valueProbability: null,
     valueProbabilities: {},
     password: false,
+    secret: false,
     destructive: null,
     outcome: operation === "DONE" ? noulOf(reply.answers, "goal_outcome_visible") : null,
     blocker: { kind: kind.choice, probability: kind.probabilities[kind.choice], probabilities: kind.probabilities },
@@ -266,6 +277,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
       decision.valueProbability = vote.probability;
       decision.valueProbabilities = probabilities;
       decision.value = vote.value;
+      decision.secret = decision.password || noulOf(reply.answers, "field_is_secret") > THRESHOLD;
     }
   }
 

@@ -206,3 +206,34 @@ test("an identifier-first sign-in whose email is in the goal goes on and ends do
   assert.deepEqual(acts, ["fill @e2 alice@example.com", "click @e3", "state save <file>"]);
   assert.equal(result.status, "done");
 });
+
+test("a one-time code Jev judges secret appears in no run file and not on stdout (#78)", async (t) => {
+  const { result, out } = await labRun(
+    t,
+    ["otp-single", "otp-single-typed", "otp-single-typed"],
+    [
+      { operation: "TYPE_TEXT", target: "1", value: "482913", secret: 0.96 },
+      { operation: "CLICK", target: "2" },
+      { operation: "DONE", outcome: 0.1 },
+    ],
+    "sign in with the code 482913",
+  );
+  assert.equal(result.status, "blocked", "the page still shows the code step");
+  for (const file of ["status.json", "inferred.jsonl", "observed.jsonl"]) {
+    assert.doesNotMatch(readFileSync(join(out, file), "utf8"), /482913/, `${file} holds the code`);
+  }
+  assert.doesNotMatch(JSON.stringify(result), /482913/, "stdout holds the code");
+  assert.match(result.snapshot, /textbox "One-time code" \[ref=e2\]: •••/);
+  const [typed] = lines(join(out, "inferred.jsonl"));
+  assert.equal(typed.value, "•••");
+});
+
+test("a code Jev judges an ordinary value is logged as typed", async (t) => {
+  const { out } = await labRun(
+    t,
+    ["otp-single", "otp-single-typed"],
+    [{ operation: "TYPE_TEXT", target: "1", value: "482913" }, { operation: "BLOCKED" }],
+    "sign in with the code 482913",
+  );
+  assert.equal(lines(join(out, "inferred.jsonl"))[0].value, "482913");
+});

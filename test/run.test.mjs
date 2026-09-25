@@ -223,18 +223,23 @@ test("the typed password is masked in the run log", async (t) => {
   assert.equal(password.value, "•••");
 });
 
-test("each typed step logs the probability of every offered value", async (t) => {
-  const { out } = await drive("login");
+test("each typed step logs the probability of every offered value, with the typed password masked in each (#78)", async (t) => {
+  const { result, out } = await drive("login");
   t.after(() => rmSync(out, { recursive: true, force: true }));
   const [email, password, click] = steps(out);
   assert.deepEqual(email.valueProbabilities, {
     "alice@example.com": 0.9,
-    "password secret": 0.02,
+    "password •••": 0.02,
     password: 0.03,
-    secret: 0.04,
+    "•••": 0.04,
     NONE: 0.01,
   });
-  assert.equal(password.valueProbabilities.secret, 0.84);
+  assert.equal(password.valueProbabilities["•••"], 0.84);
+  assert.equal(status(out).goal, "log in as alice@example.com with password ••• and open Settings");
+  for (const file of ["status.json", "inferred.jsonl", "observed.jsonl"]) {
+    assert.doesNotMatch(readFileSync(join(out, file), "utf8"), /secret/, `${file} holds the password`);
+  }
+  assert.doesNotMatch(JSON.stringify(result), /secret/, "stdout holds the password");
   assert.deepEqual(click.valueProbabilities, {});
 });
 

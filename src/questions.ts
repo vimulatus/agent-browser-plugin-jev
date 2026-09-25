@@ -34,6 +34,10 @@ no other text can be typed. Match the field's label, role and nearby text to the
 an address bar takes a URL, a password field takes the password named in the \`goal\`, an email field takes
 the email address. Choose NONE when no span belongs in that field, or it already holds the requested value.`;
 
+export const SECRET = `Assume the next operation is TYPE_TEXT and the field is the one the \`type_text_target\` question
+chooses. Does that field take a secret: a password, a one-time code, a PIN, a payment card number or security code,
+or a government ID number? Judge the field from its label, role and the text around it.`;
+
 export const DESTRUCTIVE = `Assume the next operation is CLICK and the control is the one the \`click_target\`
 question chooses for this \`goal\` on this page. Does activating that control delete data, send a message,
 make a payment, publish content, or submit an irreversible change? Judge the control itself, from its label,

@@ -2,7 +2,9 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
 import { blockerOf, blocksBeforeActing, networkBlocker, type Blocker, type Cause } from "./blocker.js";
-import { openRun, StoreFull } from "./cap.js";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { openRun, StoreFull, type RunFiles } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { checkKey, DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
@@ -22,6 +24,7 @@ import {
   type Policy,
   type Previous,
 } from "./policy/index.js";
+import { MASK, Secrets } from "./secrets.js";
 import { valueSpans } from "./spans.js";
 import { stopwatch } from "./stopwatch.js";
 
@@ -31,8 +34,6 @@ export const DEFAULT_MAX_STEPS = 60;
  * it waits for the network to go quiet, so a tree unchanged after it is no more likely to change on the next one.
  */
 const STUCK = 3;
-/** What a run logs in place of a value it typed into a field that hides what it holds. */
-export const MASK = "•••";
 
 export interface RunOptions {
   goal: string;
@@ -173,7 +174,15 @@ function notDone(decision: Decision, url: string, content: string, clicked: Clic
 }
 
 function logged(decision: Decision): string | null {
-  return decision.password && decision.value !== null ? MASK : decision.value;
+  return decision.secret && decision.value !== null ? MASK : decision.value;
+}
+
+/** Rewrites a JSON-lines file of the run through `secrets`, for the lines written before a secret was typed. */
+async function scrubLines(files: RunFiles, name: string, secrets: Secrets): Promise<void> {
+  const path = join(files.dir, name);
+  if (secrets.empty || !existsSync(path)) return;
+  const lines = (await readFile(path, "utf8")).split("\n").filter(Boolean);
+  await files.replace(name, lines.map((line) => `${JSON.stringify(secrets.scrub(JSON.parse(line)))}\n`).join(""));
 }
 
 /**
@@ -240,12 +249,13 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   const origins = new Set<string>();
   if (options.url !== undefined) origins.add(new URL(options.url).origin);
   const recordings: string[] = [];
+  const secrets = new Secrets();
 
   const write = async (state: RunStatus, step: Step | null = null) => {
     const last = state !== "running" && state !== "login";
-    if (step !== null) await files.append("inferred.jsonl", `${JSON.stringify(step)}\n`);
-    if (policy !== null) await files.writeJson("findings.json", summarize(findings), last);
-    await files.writeJson("status.json", {
+    if (step !== null) await files.append("inferred.jsonl", `${JSON.stringify(secrets.scrub(step))}\n`);
+    if (policy !== null) await files.writeJson("findings.json", secrets.scrub(summarize(findings)), last);
+    await files.writeJson("status.json", secrets.scrub({
       status: state,
       goal: options.goal,
       policy: options.policy ?? null,
@@ -263,7 +273,12 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
-    }, last);
+    }), last);
+  };
+  /** The lines written before a secret was typed hold it too, so a run that typed one rewrites them as it ends. */
+  const scrubEarlier = async () => {
+    await scrubLines(files, "inferred.jsonl", secrets);
+    await scrubLines(files, "observed.jsonl", secrets);
   };
   await write("running");
 
@@ -313,7 +328,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const judged = await judgeFindings(rules, page, gathered, applied, deps.policyJev);
       const answered = [...inferences, ...judged.inferences];
       if (answered.length > 0) {
-        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(inference)).join("\n")}\n`);
+        await files.append("inferred.jsonl", `${answered.map((inference) => JSON.stringify(secrets.scrub(inference))).join("\n")}\n`);
       }
       for (const finding of judged.findings) {
         const candidate = findingAt(finding, page.url, step);
@@ -377,7 +392,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         reason = unchanged;
         break;
       }
-      await files.append("observed.jsonl", `${JSON.stringify({ step: steps + 1, ...observation })}\n`);
+      await files.append("observed.jsonl", `${JSON.stringify(secrets.scrub({ step: steps + 1, ...observation }))}\n`);
       const content = await readContent(browser);
       if (policy !== null) await inspect(policy, observation, content, previous, steps + 1);
       previous = undefined;
@@ -464,6 +479,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         break;
       }
       step.executed = true;
+      if (decision.secret && decision.value !== null) secrets.add(decision.value, decision.label);
       previous = actedOn(decision, observation.hash);
       if (decision.operation === "CLICK") clicked = { label: decision.label, url: observation.url, content };
       history.push(step);
@@ -475,8 +491,9 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     if (status === "done") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
     if (status === "blocked") blocker ??= blockerOf(reason ?? "", decided, cause);
+    await scrubEarlier();
     await write(status);
-    return {
+    return secrets.scrub({
       status,
       url: observation.url,
       steps,
@@ -490,9 +507,10 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       reason,
       ...(blocker === undefined ? {} : { blocker }),
       durationMs: elapsed(),
-    };
+    } satisfies RunResult);
   } catch (error) {
     reason = (error as Error).message;
+    await scrubEarlier().catch(() => {});
     await stopRecording().catch(() => {});
     // The cap that failed the run can refuse its last status too, and the run still fails for the first reason.
     await write("failed").catch((refused: unknown) => {
