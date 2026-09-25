@@ -19,6 +19,7 @@
           },
           "confidence": 0.9
         },
+        "goal_outcome_visible": { "type": "noul", "noul": 0.03 },
         "click_target": {
           "type": "choice",
           "choice": "3",
@@ -82,6 +83,7 @@
           },
           "confidence": 0.88
         },
+        "goal_outcome_visible": { "type": "noul", "noul": 0.03 },
         "click_target": {
           "type": "choice",
           "choice": "3",
@@ -145,6 +147,7 @@
           },
           "confidence": 0.9
         },
+        "goal_outcome_visible": { "type": "noul", "noul": 0.03 },
         "click_target": {
           "type": "choice",
           "choice": "3",
@@ -207,6 +210,7 @@
           },
           "confidence": 0.91
         },
+        "goal_outcome_visible": { "type": "noul", "noul": 0.96 },
         "click_target": {
           "type": "choice",
           "choice": "1",

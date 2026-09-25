@@ -74,7 +74,8 @@ function launches(state) {
 }
 
 /**
- * An agent-browser that serves saved pages and moves to the next one when a decision acts. `state save <path>`
+ * An agent-browser that serves saved pages and moves to the next one when a decision acts. A page's `full` is
+ * its whole tree, for `snapshot`; a page without one serves its interactive tree for both. `state save <path>`
  * writes `SAVED_STATE` to the path, and `state load <path>` keeps what it read in `state.loaded`. It launches and
  * relaunches as `launches` says, and serves `BLANK` from a browser it relaunched on its own.
  */
@@ -94,6 +95,8 @@ export function scriptedBrowser(states, advance, human = false) {
       switch (args.join(" ")) {
         case "snapshot -i":
           return { origin: page.url, snapshot: page.snapshot };
+        case "snapshot":
+          return { origin: page.url, snapshot: page.full ?? page.snapshot };
         case "get title":
           return { title: page.title };
         case "console":

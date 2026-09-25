@@ -7,7 +7,7 @@ import { newRunDir } from "../dist/session.js";
 import { activeScope } from "../dist/scope.js";
 import { isolatedScopes, lines, pages, replay, replayingJev, SAVED_STATE, scriptedBrowser } from "./helpers.mjs";
 
-const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
+const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
 
 function options(goal, overrides = {}) {
   return {
@@ -83,7 +83,74 @@ test("a goal walk types from the goal, clicks through and lands done", async (t)
   );
   assert.equal(jev.requests[2].state.recent_actions[0].pageChanged, true);
   assert.equal(status(out).status, "done");
+  assert.equal(steps(out).at(-1).outcome, 0.96, "the DONE logs Jev's judgment that the goal's outcome shows");
   assert.equal(lines(join(out, "observed.jsonl")).length, 4);
+});
+
+test("a DONE on a page that still shows the code step after Verify ends blocked, not done (#74)", async (t) => {
+  const { result, browser, jev, out } = await drive("otp-wrong");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.match(jev.requests[2].state.page.text, /Invalid code/, "Jev reads the alert the interactive tree leaves out");
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.url, "http://127.0.0.1:8765/verify-otp.html");
+  assert.equal(result.reason, "the page did not move on after clicking Verify: it does not show the goal's outcome");
+  assert.deepEqual(acts(browser), ["fill @e2 123456", "click @e3"], "a blocked run saves no sign-in");
+  assert.equal(status(out).status, "blocked");
+  const done = steps(out).at(-1);
+  assert.equal(done.operation, "DONE");
+  assert.equal(done.outcome, 0.12);
+  assert.equal(done.reason, result.reason);
+});
+
+test("a BLOCKED on the step that rejected the submit says the page did not move on", async (t) => {
+  const { result, out } = await drive("otp-rejected");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "no supported operation can make progress: the page did not move on after clicking Verify");
+});
+
+test("a DONE right after a click that left the page as it was ends blocked, whatever Jev judged", async (t) => {
+  const { result, out } = await drive("otp-still");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "the page did not move on after clicking Verify");
+  assert.equal(steps(out).at(-1).outcome, 0.8);
+});
+
+test("a goal whose outcome shows on the same page ends done once it shows", async (t) => {
+  const { result, browser, jev, out } = await drive("save-toast");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "done");
+  assert.equal(result.url, "http://127.0.0.1:8765/profile.html");
+  assert.equal(result.reason, "every requirement is visibly satisfied");
+  assert.deepEqual(acts(browser), ["fill @e2 Ada", "click @e3", "state save <file>"]);
+  assert.ok(jev.requests.every((request) => request.questions.goal_outcome_visible.type === "noul"));
+});
+
+test("a DONE on the page a click led to, without the goal's outcome, ends blocked without saying it did not move on", async (t) => {
+  const responses = replay("login");
+  responses[3].answers.goal_outcome_visible.noul = 0.2;
+  const run_options = options("log in as alice@example.com with password secret and open Settings");
+  t.after(() => rmSync(run_options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages("login"));
+  const result = await run(run_options, { browser, jev: replayingJev(responses), scopes: isolatedScopes() });
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.url, "http://127.0.0.1:8765/settings.html");
+  assert.equal(result.reason, "the page does not show the goal's outcome");
+});
+
+test("a DONE Jev is unsure of ends blocked, even on a page that shows the outcome", async (t) => {
+  const { result, out } = await drive("unsure-done");
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  assert.equal(result.status, "blocked");
+  assert.equal(result.reason, "DONE at 0.40 is too unsure to call the goal met");
 });
 
 test("a goal run without a policy judges nothing and writes no findings", async (t) => {

@@ -95,7 +95,7 @@ report:
 
 Everything lands in `--out`, named in the result and in `status.json`. With no `--out`, each run of a session gets a new `sessions/<session>/runs/<timestamp>/` in `./.soab/` when the repo has one, else in `~/.soab/`; older runs of the session sit beside it until `store.maxBytes` in `config.json` (1 GiB by default) evicts the least recently used runs, then sign-ins.
 
-- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. `recordings` names every file a `--record` went to: two when a login window split it.
+- A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. Done means the page shows the goal's outcome; a run whose page did not move on after its last submit, such as a wrong code, ends blocked and its `reason` says so. `recordings` names every file a `--record` went to: two when a login window split it.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
 - A walk prints `{ status, url, steps, actions, findings, findingsFile, out, record, reason, durationMs }` and writes `findings.json`; `findingsFile` is its absolute path. A goal run with `--policy` adds the same key.
 - `durationMs` is how long the command took, in whole milliseconds. `status.json` carries it too, growing while the run is `running`, so it says how long a run has been going.
