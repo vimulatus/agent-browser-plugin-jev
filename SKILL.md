@@ -49,6 +49,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--human` | | Moves the pointer along a curve instead of jumping |
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+| `--quiet` | | Prints no line per step on stderr |
 
 ## Scopes
 
@@ -60,7 +61,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 
 `config.json` from the project merges over the global one. `${VAR}` in a string reads the environment; an unset one is an error that names it.
 
-A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
+A run blocks until it ends and prints one JSON line on stdout. Each step prints one line on stderr as it happens, such as `step 5 · CLICK "Verify" · 0.96`; `--quiet` turns them off. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 
 ## Write a policy
 

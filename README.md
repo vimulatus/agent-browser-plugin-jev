@@ -103,6 +103,7 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 | `--human` | | Moves the pointer along a curve instead of jumping to each target |
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+| `--quiet` | | Prints no line per step on stderr |
 
 One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one speculative Choice of target per operation, one Choice per typeable field of which span of the goal belongs in that field, a Noul for whether the click is irreversible, and a Noul for whether the page shows the goal's outcome. A page offers at most 20 typeable fields, so one step stays inside the request's token budget. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead. Spans whose words overlap, like `123456` and `one-time code 123456`, count as one value: the one Jev ranks first is typed when their probabilities sum to more than 0.5 and more than `NONE`.
 
@@ -300,11 +301,12 @@ report:
 
 An agent runs `soab` like any other command and reads one JSON line from stdout when it ends. A run blocks until it is done, blocked or failed, so an agent that wants to go on meanwhile starts it in the background.
 
-Two lines go to stderr while the run is in flight:
+These lines go to stderr while the run is in flight; stdout stays the one JSON line:
 
 | Line | When |
 |---|---|
 | `soab: writing to <out>` | At the start. `<out>/status.json` reports the run from then on |
+| `step 4 · TYPE "Verification Code" ← ••• · 0.90` | After each step of a goal run or a walk: the act, its target, the value through the same mask as the run's files, and Jev's confidence. `--quiet` turns these off |
 | `soab: sign in on the window at <url>` | The run opened a window for a login. Tell the person to sign in there |
 
 `status` in `status.json` is `running`, `login`, `done`, `blocked` or `failed`.

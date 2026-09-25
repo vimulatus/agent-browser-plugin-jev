@@ -24,6 +24,7 @@ import {
   type Policy,
   type Previous,
 } from "./policy/index.js";
+import { stepLine } from "./progress.js";
 import { MASK, Secrets } from "./secrets.js";
 import { valueSpans } from "./spans.js";
 import { stopwatch } from "./stopwatch.js";
@@ -50,6 +51,8 @@ export interface RunOptions {
   /** Whether a login page the goal cannot fill is handed to the person in a window. Off, the run ends blocked there. */
   handoff: boolean;
   loginTimeoutMs: number;
+  /** Where each step's line goes as it happens; the command sends it to stderr unless `--quiet`. */
+  progress?: (line: string) => void;
 }
 
 /** What `<out>/status.json` reports while the run is in flight and once it has ended. `login` means a window is open for the person to sign in. */
@@ -253,7 +256,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
 
   const write = async (state: RunStatus, step: Step | null = null) => {
     const last = state !== "running" && state !== "login";
-    if (step !== null) await files.append("inferred.jsonl", `${JSON.stringify(secrets.scrub(step))}\n`);
+    if (step !== null) {
+      const logged = secrets.scrub(step);
+      await files.append("inferred.jsonl", `${JSON.stringify(logged)}\n`);
+      options.progress?.(stepLine(logged));
+    }
     if (policy !== null) await files.writeJson("findings.json", secrets.scrub(summarize(findings)), last);
     await files.writeJson("status.json", secrets.scrub({
       status: state,

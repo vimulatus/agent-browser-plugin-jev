@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentBrowser } from "../dist/agent-browser.js";
+import { run } from "../dist/run.js";
 import { discoverScopes } from "../dist/scope.js";
+import { newRunDir } from "../dist/session.js";
 
 const ACTS = new Set(["click", "fill", "select", "scroll", "wait"]);
 
@@ -185,3 +187,35 @@ export function scriptedJev(intents) {
 export function lines(path) {
   return readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
 }
+
+const LAB_READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
+
+/** Runs `goal` over lab pages by name, one scripted Jev intent per step, with a policy Jev that must never be asked. */
+export function labRun(t, names, intents, goal, overrides = {}) {
+  return labRunPages(t, lab(...names), intents, goal, overrides);
+}
+
+export async function labRunPages(t, pages, intents, goal, overrides = {}) {
+  const scopes = isolatedScopes();
+  const options = {
+    goal,
+    session: "lab",
+    maxSteps: 10,
+    out: newRunDir(scopes, "lab"),
+    allow: new Set(),
+    model: "jev-latest",
+    human: false,
+    handoff: false,
+    loginTimeoutMs: 200,
+    ...overrides,
+  };
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  const browser = scriptedBrowser(pages);
+  const jev = scriptedJev(intents);
+  const policyJev = { ask: async () => assert.fail("no policy") };
+  const result = await run(options, { browser, jev, policyJev, scopes });
+  const status = JSON.parse(readFileSync(join(options.out, "status.json"), "utf8"));
+  const acts = browser.state.calls.filter((call) => !LAB_READS.has(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
+  return { result, status, jev, acts, out: options.out };
+}
+

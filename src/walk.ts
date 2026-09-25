@@ -26,6 +26,7 @@ import { refused, type RunOptions, type RunStatus } from "./run.js";
 import { MASK } from "./secrets.js";
 import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
+import { stepLine } from "./progress.js";
 import { stopwatch } from "./stopwatch.js";
 /** A walk is a run with a policy and no goal. */
 export type WalkOptions = RunOptions & { policy: string };
@@ -291,6 +292,7 @@ export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<W
       };
       const record = async () => {
         await files.append("steps.jsonl", `${JSON.stringify(step)}\n`);
+        options.progress?.(stepLine({ ...step, operation: step.kind }));
         await save("running");
       };
 

@@ -39,6 +39,7 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --human            Move the pointer along a curve instead of jumping
   --no-handoff       End blocked at a login page instead of opening a window for it
   --login-timeout <s> Seconds to wait for the person to sign in; default ${LOGIN_TIMEOUT_MS / 1000}
+  --quiet            Print no line per step on stderr
 
 Needs TYPESAFE_API_KEY and the agent-browser binary on PATH.
 `;
@@ -78,6 +79,7 @@ export function parseRunArgs(argv: string[]): RunOptions {
     human: false,
     handoff: true,
     loginTimeoutMs: LOGIN_TIMEOUT_MS,
+    progress: (line) => process.stderr.write(`${line}\n`),
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -92,6 +94,10 @@ export function parseRunArgs(argv: string[]): RunOptions {
     }
     if (flag === "--no-handoff") {
       options.handoff = false;
+      continue;
+    }
+    if (flag === "--quiet") {
+      delete options.progress;
       continue;
     }
     const value = argv[++i];

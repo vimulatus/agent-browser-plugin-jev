@@ -1,41 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { run } from "../dist/run.js";
-import { newRunDir } from "../dist/session.js";
-import { isolatedScopes, lab, lines, scriptedBrowser, scriptedJev } from "./helpers.mjs";
-
-const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
-
-/** Runs `goal` over lab pages by name, one scripted Jev intent per step, with a policy Jev that must never be asked. */
-export function labRun(t, names, intents, goal, overrides = {}) {
-  return labRunPages(t, lab(...names), intents, goal, overrides);
-}
-
-export async function labRunPages(t, pages, intents, goal, overrides = {}) {
-  const scopes = isolatedScopes();
-  const options = {
-    goal,
-    session: "lab",
-    maxSteps: 10,
-    out: newRunDir(scopes, "lab"),
-    allow: new Set(),
-    model: "jev-latest",
-    human: false,
-    handoff: false,
-    loginTimeoutMs: 200,
-    ...overrides,
-  };
-  t.after(() => rmSync(options.out, { recursive: true, force: true }));
-  const browser = scriptedBrowser(pages);
-  const jev = scriptedJev(intents);
-  const policyJev = { ask: async () => assert.fail("no policy") };
-  const result = await run(options, { browser, jev, policyJev, scopes });
-  const status = JSON.parse(readFileSync(join(options.out, "status.json"), "utf8"));
-  const acts = browser.state.calls.filter((call) => !READS.has(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
-  return { result, status, jev, acts, out: options.out };
-}
+import { lab, labRun, labRunPages, lines } from "./helpers.mjs";
 
 test("a code step the goal has no code for blocks as otp, naming the code field", async (t) => {
   const { result, status } = await labRun(
