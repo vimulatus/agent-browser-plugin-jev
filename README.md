@@ -275,7 +275,7 @@ To start a session clean:
 soab session reset checkout
 ```
 
-It closes the agent-browser session named `checkout`, so its browser holds no sign-in, then deletes `sessions/checkout/` from the active scope's store: every run and the saved `auth.json`. Other sessions, `checkout-repro` included, are left alone. It prints `{ session, deleted }` as JSON, where `deleted` is the directory it removed, or null when the session had nothing to delete; stderr says the same in words. It exits 0 either way.
+It closes the agent-browser session named `checkout`, so its browser holds no sign-in, then deletes `sessions/checkout/` from the active scope's store: every run and the saved `auth.json`. Last it deletes the sign-in agent-browser saved for a login handoff, `~/.agent-browser/sessions/checkout-checkout.json` (or `.json.enc`, under `namespaces/<ns>/state/` when `AGENT_BROWSER_NAMESPACE` is set). Other sessions, `checkout-repro` included, are left alone. It prints `{ session, deleted }` as JSON, where `deleted` lists the directory and each file it removed, and is empty when the session had nothing to delete; stderr says the same in words. It exits 0 either way.
 
 | File | What is in it |
 |---|---|
