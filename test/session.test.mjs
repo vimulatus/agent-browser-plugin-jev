@@ -53,7 +53,7 @@ test("each run gets its own directory under its session, in the order the runs s
 
 test("a session name that is not one path segment is refused", () => {
   const scopes = discoverScopes(world());
-  for (const session of ["", ".", "..", "a/b", "..\\up"]) {
+  for (const session of ["", ".", "..", ".used.json", "a/b", "..\\up"]) {
     assert.throws(() => newRunDir(scopes, session), /session/, session);
   }
 });
