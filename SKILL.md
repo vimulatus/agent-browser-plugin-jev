@@ -43,12 +43,20 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--out` | `<dir>` | Where the run writes; default a fresh directory under the temp dir |
 | `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, or `all` |
 | `--model` | `<name>` | The System One model; default `jev-latest` |
-| `--policy` | `<file>` | A path, or `errors`, `perf` or `bug-hunt` by name |
+| `--policy` | `<file>` | A path, or a name: `./.soab/policies/`, then `~/.soab/policies/`, then shipped `errors`, `perf`, `bug-hunt` |
 | `--fixtures` | `<file>` | YAML values a walk types into forms; built-in keys are `email`, `password`, `name`, `phone`, `address` |
 | `--record` | `<file>` | Records to this `.webm` or `.mp4`, cursor included; needs ffmpeg |
 | `--human` | | Moves the pointer along a curve instead of jumping |
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
+
+## Scopes
+
+`soab init` makes the working directory a project: it creates `./.soab/` with `config.json` and `policies/`, and adds `.soab/sessions/` to `.gitignore`. A second `init` changes nothing. The project scope is the nearest `./.soab/` up from the working directory; the global scope is `~/.soab/`.
+
+`--policy <name>` loads `<name>.yaml` from `./.soab/policies/`, else `~/.soab/policies/`, else the shipped policies. Put a repo's own policy in `./.soab/policies/` and run it by name. A path is read as a path.
+
+`config.json` from the project merges over the global one. `${VAR}` in a string reads the environment; an unset one is an error that names it.
 
 A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 
