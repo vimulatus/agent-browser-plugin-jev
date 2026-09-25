@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Check your email</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- Nothing on this page signs you in: the link goes to an inbox the browser cannot reach. -->
+<h1>Check your email</h1>
+<p>We sent a sign-in link to your email. Open it on this device to continue.</p>
+<p id="sent" class="note" role="status"></p>
+<button type="button" id="resend">Resend link</button>
+<script>
+  document.getElementById("resend").addEventListener("click", () => {
+    document.getElementById("sent").textContent = "We sent the link again.";
+  });
+</script>
+</body>
+</html>

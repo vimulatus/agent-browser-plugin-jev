@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Why kettles whistle</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- Not a login page: the email box only subscribes to a newsletter. -->
+<article>
+  <h1>Why kettles whistle</h1>
+  <p>A kettle whistles when steam forced through a narrow opening sets up a standing wave, the way air does in a flute.</p>
+  <p>The pitch depends on the size of the chamber in the spout, not on how hot the water is. Once the water boils, the flow of steam is steady enough to hold the note.</p>
+  <p>That is why the whistle starts only when the water reaches a full boil, and why it stops when you lift the kettle off the heat.</p>
+</article>
+<aside>
+  <h2>Get the newsletter</h2>
+  <form id="newsletter">
+    <label for="email">Email</label>
+    <input id="email" type="email">
+    <button type="submit">Subscribe</button>
+  </form>
+  <p id="subscribed" role="status"></p>
+</aside>
+<script>
+  document.getElementById("newsletter").addEventListener("submit", (event) => {
+    event.preventDefault();
+    document.getElementById("subscribed").textContent = "Thanks for subscribing.";
+  });
+</script>
+</body>
+</html>

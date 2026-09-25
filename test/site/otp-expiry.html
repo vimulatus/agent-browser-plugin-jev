@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Verify it's you</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- The correct code is 123456, accepted only within 5 s of load or of the last "Resend code". -->
+<h1>Verify it's you</h1>
+<p>Enter the 6-digit code we sent to your phone. It expires in 5 seconds.</p>
+<form id="otp">
+  <label for="code">One-time code</label>
+  <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+  <p id="error" class="error" role="alert"></p>
+  <button type="submit">Verify</button>
+  <button type="button" id="resend" hidden>Resend code</button>
+</form>
+<script>
+  const error = document.getElementById("error");
+  const resend = document.getElementById("resend");
+  let expired = false;
+  let timer;
+  const start = () => {
+    expired = false;
+    resend.hidden = true;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      expired = true;
+      error.textContent = "Code expired";
+      resend.hidden = false;
+    }, 5000);
+  };
+  resend.addEventListener("click", () => {
+    start();
+    error.textContent = "We sent a new code. It expires in 5 seconds.";
+  });
+  document.getElementById("otp").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (expired) error.textContent = "Code expired";
+    else if (document.getElementById("code").value === "123456") location.href = "home.html";
+    else error.textContent = "Invalid code";
+  });
+  start();
+</script>
+</body>
+</html>

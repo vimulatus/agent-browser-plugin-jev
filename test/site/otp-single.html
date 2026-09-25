@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Verify it's you</title><link rel="stylesheet" href="site.css"></head>
+<body>
+<!-- The correct code is 123456. -->
+<h1>Verify it's you</h1>
+<p>Enter the 6-digit code we sent to your phone.</p>
+<form id="otp">
+  <label for="code">One-time code</label>
+  <input id="code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+  <p id="error" class="error" role="alert"></p>
+  <button type="submit">Verify</button>
+</form>
+<script>
+  document.getElementById("otp").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (document.getElementById("code").value === "123456") location.href = "home.html";
+    else document.getElementById("error").textContent = "Invalid code";
+  });
+</script>
+</body>
+</html>
