@@ -1,6 +1,17 @@
-import { choiceOf, noulOf, type Criteria, type Jev, type Question, type Request } from "./jev.js";
+import { choiceOf, noulOf, type Criteria, type Jev, type Question, type Reply, type Request } from "./jev.js";
 import type { Observation } from "./observe.js";
-import { DESTRUCTIVE, DESTRUCTIVE_VERB, NEXT_ACTION, OPERATION_LABELS, OUTCOME, TARGET, VALUE, VERBS } from "./questions.js";
+import {
+  BLOCKER_KIND,
+  BLOCKER_KINDS,
+  DESTRUCTIVE,
+  DESTRUCTIVE_VERB,
+  NEXT_ACTION,
+  OPERATION_LABELS,
+  OUTCOME,
+  TARGET,
+  VALUE,
+  VERBS,
+} from "./questions.js";
 import type { Element, Operation as ElementOperation } from "./snapshot.js";
 import { NO_VALUE, valueVote } from "./spans.js";
 
@@ -19,6 +30,12 @@ export interface Recent {
 /** What the run may do without asking: every verb in the set, or every verb at all. */
 export type Allow = Set<string> | "all";
 
+/** A field a blocked run needs a value for: the ref the page gave it, and the label `resume --value` names it by. */
+export interface Field {
+  ref: string;
+  label: string;
+}
+
 export interface Decision {
   operation: Operation;
   target: string | null;
@@ -31,6 +48,10 @@ export interface Decision {
   destructive: { probability: number; verb: string | null } | null;
   /** On a DONE, how likely Jev judges the page to show the goal's outcome; null on any other operation. */
   outcome: number | null;
+  /** What Jev judges stops the goal on this page, asked on every step and read when the run ends blocked. */
+  blocker: { kind: string; probability: number; probabilities: Record<string, number> };
+  /** Every empty field on the page no span of the goal belongs in; read only when the run blocks on a kind that needs values. */
+  unfilled(): Field[];
   confidence: number;
   probabilities: Record<string, number>;
   targetProbabilities: Record<string, number>;
@@ -119,6 +140,26 @@ export interface DecideInput {
   allow: Allow;
 }
 
+/** A field holds something: a typed value, or the dots a password field shows for one. */
+function filled(element: Element): boolean {
+  return (element.value ?? "").trim() !== "";
+}
+
+/**
+ * The empty fields the goal holds no value for: every typeable field Jev was asked about and answered NONE, and every
+ * one it was not asked about, because the goal has no span or the page has more fields than a request offers.
+ */
+function unfilled(elements: Element[], asked: Map<string, Target> | undefined, answers: Reply["answers"], spans: string[]): Field[] {
+  return elements
+    .filter((element) => element.operations.includes("TYPE_TEXT") && !filled(element))
+    .filter((element) => {
+      if (asked?.has(element.index) !== true) return true;
+      const { probabilities } = choiceOf(answers, valueKey(element.index), [...spans, NO_VALUE]);
+      return valueVote(probabilities).value === null;
+    })
+    .map(({ ref, label }) => ({ ref, label }));
+}
+
 /**
  * One System One request per step. It picks the operation, a target for every operation that has one,
  * the span of the goal that belongs in each field it may type into, whether clicking is irreversible, and
@@ -144,6 +185,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
       instructions: { rules: OUTCOME },
       criteria: { true: "The page shows the goal's outcome.", false: "The page does not show it yet." },
     },
+    blocker_kind: { type: "choice", criteria: { ...BLOCKER_KINDS }, instructions: { rules: BLOCKER_KIND } },
   };
   for (const [operation, targets] of byOperation) {
     questions[`${operation.toLowerCase()}_target`] = targetQuestion(operation, targets);
@@ -187,6 +229,7 @@ export async function decide(input: DecideInput): Promise<Decision> {
   const answer = choiceOf(reply.answers, "operation", Object.keys(operations));
   const operation = answer.choice as Operation;
   const targets = byOperation.get(operation as ElementOperation);
+  const kind = choiceOf(reply.answers, "blocker_kind", Object.keys(BLOCKER_KINDS));
   const decision: Decision = {
     operation,
     target: null,
@@ -198,6 +241,8 @@ export async function decide(input: DecideInput): Promise<Decision> {
     password: false,
     destructive: null,
     outcome: operation === "DONE" ? noulOf(reply.answers, "goal_outcome_visible") : null,
+    blocker: { kind: kind.choice, probability: kind.probabilities[kind.choice], probabilities: kind.probabilities },
+    unfilled: () => unfilled(observation.elements, byOperation.get("TYPE_TEXT"), reply.answers, spans),
     confidence: answer.confidence,
     probabilities: answer.probabilities,
     targetProbabilities: {},

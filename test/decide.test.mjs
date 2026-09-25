@@ -22,8 +22,13 @@ function observation(text, url = "http://127.0.0.1:8765/login.html") {
 const LOGIN = pages("login")[0].snapshot;
 const GOAL = "log in as alice@example.com with password secret and open Settings";
 
+/** Jev's answer that nothing on the page stops the goal, for tests about the other questions. */
+const NOTHING_BLOCKS = replay("login")[0].answers.blocker_kind;
+
 function ask(answers) {
-  return replayingJev([{ model: "jev-latest", answers, usage: { input_tokens: 10, output_tokens: 2 } }]);
+  return replayingJev([
+    { model: "jev-latest", answers: { blocker_kind: NOTHING_BLOCKS, ...answers }, usage: { input_tokens: 10, output_tokens: 2 } },
+  ]);
 }
 
 function input(jev, overrides = {}) {
@@ -46,6 +51,7 @@ test("one request offers the operation, a target per operation, a value per fiel
   const [request] = jev.requests;
   assert.deepEqual(Object.keys(request.questions).sort(), [
     "action_is_destructive",
+    "blocker_kind",
     "click_target",
     "destructive_verb",
     "goal_outcome_visible",
@@ -132,6 +138,7 @@ test("--allow all leaves the destructive questions out of the request", async ()
   const jev = replayingJev(replay("login"));
   await decide(input(jev, { allow: "all" }));
   assert.deepEqual(Object.keys(jev.requests[0].questions).sort(), [
+    "blocker_kind",
     "click_target",
     "goal_outcome_visible",
     "operation",

@@ -87,7 +87,7 @@ soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock.
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked. `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -111,6 +111,30 @@ Jev reads the page from its whole accessibility tree, cut at 6000 characters, so
 A run also ends `blocked` before its step budget in two other places. A click Jev judges irreversible, with its verb not in `--allow`, is refused, and the first refusal ends the run: `delete is destructive and not in --allow: did not click Delete`. Three steps in a row that leave the page unchanged end it too, WAITs included, because a WAIT already waits for the network to go quiet: `the page did not change after 3 WAITs in a row`, or `3 actions in a row left the page unchanged` when the three were not all WAITs. A step that changes the page starts the count again.
 
 A goal run with `--policy` judges every page it reaches, before each decision, and writes `findings.json` the way the walk does; the result and `status.json` carry the count and add `findingsFile`, the absolute path of that file. A policy that collects `har` is refused for a goal run, because the HAR needs a reload: judge that page with `--max-steps 0` instead.
+
+### When a run is blocked
+
+A blocked run's result, and its `status.json`, carry `blocker`, so an agent can tell a code step from a captcha from a 500 without reading the page:
+
+```json
+"blocker": { "kind": "otp", "fields": [{ "ref": "e25", "label": "Verification Code" }], "reason": "the goal holds no value for Verification Code" }
+```
+
+| `kind` | The page |
+|---|---|
+| `otp` | Asks for a one-time code |
+| `sign_in` | Asks the user to sign in: an email, a password, or a link sent by email |
+| `approval` | Waits for the user to approve on another device |
+| `captcha` | Asks the user to prove they are a person |
+| `missing_value` | Has a form that needs values the goal does not hold |
+| `permission` | Offers a click the run refused as destructive, not in `--allow` |
+| `error_page` | Shows a server error |
+| `rate_limit` | Says there were too many requests |
+| `unknown` | Stops the goal some other way, or Jev is unsure what stops it |
+
+`fields` lists every empty field on the page the goal holds no value for, with its ref and label, when the kind is `otp`, `sign_in` or `missing_value`; it is empty for the others. `reason` is the sentence the run has always given. A run that ends `done` or `failed` has no `blocker`.
+
+The kind costs no extra call: every step's request asks Jev a `blocker_kind` Choice beside the operation, and `inferred.jsonl` logs its probabilities as `blockerProbabilities`. The run reads it only when it ends blocked. A refused click is `permission` without asking. A field the goal holds no value for is `missing_value`, unless Jev judges the page a code or a sign-in step. Otherwise the kind is Jev's pick when it is over 0.5, and `unknown` when Jev is unsure or judges that nothing stops the goal.
 
 ### Signing in
 

@@ -1,6 +1,7 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
+import { blockerOf, type Blocker, type Cause } from "./blocker.js";
 import { openRun, StoreFull } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
@@ -67,6 +68,8 @@ export interface RunResult {
   /** Every file the recording went to: one, or one per stretch when a handoff split it. */
   recordings: string[];
   reason: string | null;
+  /** What stopped a blocked run, and the fields it needs; absent on any other status. */
+  blocker?: Blocker;
   durationMs: number;
 }
 
@@ -95,6 +98,7 @@ interface Step {
   valueProbabilities: Record<string, number>;
   destructive: Decision["destructive"];
   outcome: number | null;
+  blockerProbabilities: Record<string, number>;
   latencyMs: number;
   usage: Record<string, number>;
   model: string;
@@ -231,6 +235,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
   let observation: Observation | null = null;
   let status: RunResult["status"] = "blocked";
   let reason: string | null = `reached --max-steps ${options.maxSteps}`;
+  let blocker: Blocker | undefined;
   let steps = 0;
   const origins = new Set<string>();
   if (options.url !== undefined) origins.add(new URL(options.url).origin);
@@ -254,6 +259,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       recordings,
       model: options.model,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       startedAt,
       updatedAt: new Date().toISOString(),
       durationMs: elapsed(),
@@ -357,6 +363,8 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
 
     let previous: Previous | undefined;
     let clicked: Clicked | null = null;
+    let decided: Decision | null = null;
+    let cause: Cause = null;
     while (steps < options.maxSteps) {
       observation = await observe(browser);
       origins.add(new URL(observation.url).origin);
@@ -384,6 +392,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         recent: recent(history),
         allow: options.allow,
       });
+      decided = decision;
       steps++;
       const step: Step = {
         step: steps,
@@ -401,6 +410,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         valueProbabilities: decision.valueProbabilities,
         destructive: decision.destructive,
         outcome: decision.outcome,
+        blockerProbabilities: decision.blocker.probabilities,
         latencyMs: decision.latencyMs,
         usage: decision.usage,
         model: decision.model,
@@ -409,6 +419,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       const stalled = stalledOn(decision, observation.url, clicked);
       if (stalled !== null) {
         if (!options.handoff || !loginPage(observation)) {
+          if (decision.operation === "TYPE_TEXT") cause = "no_value";
           reason = step.reason = stalled;
           await write("running", step);
           break;
@@ -420,6 +431,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       }
       const denied = refused(decision.destructive, options.allow);
       if (denied !== null) {
+        cause = "refused";
         reason = step.reason = `${denied}: did not click ${decision.label}`;
         await write("running", step);
         break;
@@ -455,6 +467,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     // A blocked run does not save, so a login that timed out does not overwrite the session's last sign-in.
     if (status === "done") await saveAuth(store, options.session, browser);
     observation ??= await observe(browser);
+    if (status === "blocked") blocker = blockerOf(reason ?? "", decided, cause);
     await write(status);
     return {
       status,
@@ -468,6 +481,7 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
       record: options.record ?? null,
       recordings,
       reason,
+      ...(blocker === undefined ? {} : { blocker }),
       durationMs: elapsed(),
     };
   } catch (error) {

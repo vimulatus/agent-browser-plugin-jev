@@ -19,6 +19,15 @@ export function pages(name) {
   return JSON.parse(readFileSync(new URL("./fixtures/pages.json", import.meta.url), "utf8"))[name];
 }
 
+/** The pages of `test/site/`, as agent-browser 0.38.1 read them, by name: one page state each. */
+export function lab(...names) {
+  const all = JSON.parse(readFileSync(new URL("./fixtures/lab-pages.json", import.meta.url), "utf8"));
+  return names.map((name) => {
+    assert.ok(all[name], `no lab page ${name}`);
+    return all[name];
+  });
+}
+
 export function replay(name) {
   return JSON.parse(readFileSync(new URL(`./replay/${name}.json`, import.meta.url), "utf8")).responses;
 }
@@ -104,7 +113,7 @@ export function scriptedBrowser(states, advance, human = false) {
         case "errors":
           return { errors: [] };
         case "network requests":
-          return { requests: [] };
+          return { requests: page.requests ?? [] };
         default:
           return {};
       }
@@ -122,6 +131,53 @@ export function replayingJev(responses) {
       const response = responses[requests.length - 1];
       assert.ok(response, `no recorded Jev response for step ${requests.length}`);
       return response;
+    },
+  };
+}
+
+/** A choice answer over `options` that picks `chosen` at `p` and spreads the rest evenly. */
+export function choiceAnswer(options, chosen, p = 0.9) {
+  assert.ok(options.includes(chosen), `${chosen} is not one of ${options.join(", ")}`);
+  const rest = options.length === 1 ? 0 : (1 - p) / (options.length - 1);
+  const probabilities = Object.fromEntries(options.map((option) => [option, option === chosen ? (options.length === 1 ? 1 : p) : rest]));
+  return { type: "choice", choice: chosen, probabilities, confidence: probabilities[chosen] };
+}
+
+/**
+ * A Jev that answers each request from one hand-written intent per step, shaped to the questions the request asks:
+ * `operation`, `target` (the element index), `value` for the target's field or `values` by index, `kind` and `kindP`
+ * for the blocker, and the nouls `outcome`, `destructive`, `secret`. What an intent leaves out is answered as the
+ * unremarkable case: nothing blocks, nothing is destructive or secret, the first target, no value.
+ */
+export function scriptedJev(intents) {
+  const requests = [];
+  const answer = (intent, key, question) => {
+    const options = Object.keys(question.criteria ?? {});
+    if (key === "operation") return choiceAnswer(options, intent.operation);
+    const picks = key === "next_element" || key === `${intent.operation?.toLowerCase()}_target`;
+    if (key.endsWith("_target") || key === "next_element") return choiceAnswer(options, (picks && intent.target) || options[0]);
+    if (key === "blocker_kind") return choiceAnswer(options, intent.kind ?? "none", intent.kindP ?? 0.9);
+    if (key === "destructive_verb") return choiceAnswer(options, intent.verb ?? "submit");
+    const field = /^(?:type_text|fixture)_value_(.+)$/.exec(key)?.[1];
+    if (field !== undefined) {
+      const own = field === intent.target && (intent.operation === "TYPE_TEXT" || intent.operation === undefined);
+      const value = intent.values?.[field] ?? (own ? intent.value : undefined) ?? "NONE";
+      return choiceAnswer(options, value);
+    }
+    if (question.type === "noul") {
+      const noul = { goal_outcome_visible: intent.outcome, action_is_destructive: intent.destructive, field_is_secret: intent.secret }[key];
+      return { type: "noul", noul: noul ?? (key === "goal_outcome_visible" && intent.operation === "DONE" ? 0.95 : 0.05) };
+    }
+    throw new Error(`scriptedJev: no answer for ${key}`);
+  };
+  return {
+    requests,
+    async ask(request) {
+      requests.push(request);
+      const intent = intents[requests.length - 1];
+      assert.ok(intent, `no scripted Jev intent for step ${requests.length}`);
+      const answers = Object.fromEntries(Object.entries(request.questions).map(([key, q]) => [key, answer(intent, key, q)]));
+      return { model: "jev-latest", answers, usage: { input_tokens: 600, output_tokens: 30 } };
     },
   };
 }

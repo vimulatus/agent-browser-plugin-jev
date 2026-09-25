@@ -5,6 +5,7 @@
     {
       "model": "jev-latest",
       "answers": {
+        "blocker_kind": {"type": "choice", "choice": "none", "probabilities": {"otp": 0.01, "sign_in": 0.01, "approval": 0.01, "captcha": 0.01, "missing_value": 0.01, "permission": 0.01, "error_page": 0.01, "rate_limit": 0.01, "unknown": 0.01, "none": 0.91}, "confidence": 0.91},
         "operation": {
           "type": "choice",
           "choice": "CLICK",
@@ -38,6 +39,7 @@
     {
       "model": "jev-latest",
       "answers": {
+        "blocker_kind": {"type": "choice", "choice": "none", "probabilities": {"otp": 0.01, "sign_in": 0.01, "approval": 0.01, "captcha": 0.01, "missing_value": 0.01, "permission": 0.01, "error_page": 0.01, "rate_limit": 0.01, "unknown": 0.01, "none": 0.91}, "confidence": 0.91},
         "operation": {
           "type": "choice",
           "choice": "CLICK",
@@ -71,6 +73,7 @@
     {
       "model": "jev-latest",
       "answers": {
+        "blocker_kind": {"type": "choice", "choice": "none", "probabilities": {"otp": 0.01, "sign_in": 0.01, "approval": 0.01, "captcha": 0.01, "missing_value": 0.01, "permission": 0.01, "error_page": 0.01, "rate_limit": 0.01, "unknown": 0.01, "none": 0.91}, "confidence": 0.91},
         "operation": {
           "type": "choice",
           "choice": "CLICK",

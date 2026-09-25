@@ -1,0 +1,101 @@
+{
+  "otp-single": {
+    "url": "http://127.0.0.1:8792/otp-single.html",
+    "title": "Verify it's you",
+    "snapshot": "- heading \"Verify it's you\" [level=1, ref=e1]\n- textbox \"One-time code\" [ref=e2]\n- button \"Verify\" [ref=e3]",
+    "full": "- heading \"Verify it's you\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Enter the 6-digit code we sent to your phone.\"\n- generic\n  - LabelText\n    - StaticText \"One-time code\"\n  - textbox \"One-time code\" [ref=e2]\n  - alert\n  - button \"Verify\" [ref=e3]"
+  },
+  "otp-single-typed": {
+    "url": "http://127.0.0.1:8792/otp-single.html",
+    "title": "Verify it's you",
+    "snapshot": "- heading \"Verify it's you\" [level=1, ref=e1]\n- textbox \"One-time code\" [ref=e2]: 482913\n- button \"Verify\" [ref=e3]",
+    "full": "- heading \"Verify it's you\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Enter the 6-digit code we sent to your phone.\"\n- generic\n  - LabelText\n    - StaticText \"One-time code\"\n  - textbox \"One-time code\" [ref=e2]: 482913\n    - StaticText \"482913\"\n  - alert\n  - button \"Verify\" [ref=e3]"
+  },
+  "id-first-login": {
+    "url": "http://127.0.0.1:8792/id-first-login.html",
+    "title": "Sign in",
+    "snapshot": "- heading \"Sign in\" [level=1, ref=e1]\n- textbox \"Email\" [ref=e2]\n- button \"Next\" [ref=e3]",
+    "full": "- heading \"Sign in\" [level=1, ref=e1]\n- generic\n  - LabelText\n    - StaticText \"Email\"\n  - textbox \"Email\" [ref=e2]\n  - button \"Next\" [ref=e3]"
+  },
+  "push-approve": {
+    "url": "http://127.0.0.1:8792/push-approve.html",
+    "title": "Approve the sign-in",
+    "snapshot": "- heading \"Approve the sign-in on your phone\" [level=1, ref=e1]",
+    "full": "- heading \"Approve the sign-in on your phone\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"We sent a notification to your phone. Tap Approve to finish signing in.\"\n- paragraph\n  - StaticText \"Waiting for approval…\""
+  },
+  "captcha": {
+    "url": "http://127.0.0.1:8792/captcha.html",
+    "title": "Before you continue",
+    "snapshot": "- heading \"Before you continue to Acme\" [level=1, ref=e1]\n- checkbox \" I'm not a robot\" [checked=false, ref=e2]",
+    "full": "- heading \"Before you continue to Acme\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Confirm you are a person.\"\n- checkbox \" I'm not a robot\" [checked=false, ref=e2]"
+  },
+  "magic-link": {
+    "url": "http://127.0.0.1:8792/magic-link.html",
+    "title": "Check your email",
+    "snapshot": "- heading \"Check your email\" [level=1, ref=e1]\n- button \"Resend link\" [ref=e2]",
+    "full": "- heading \"Check your email\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"We sent a sign-in link to your email. Open it on this device to continue.\"\n- status\n- button \"Resend link\" [ref=e2]"
+  },
+  "form-missing": {
+    "url": "http://127.0.0.1:8792/form-missing.html",
+    "title": "New invoice",
+    "snapshot": "- heading \"New invoice\" [level=1, ref=e1]\n- textbox \"Customer name\" [ref=e2]\n- textbox \"GST number\" [ref=e3]\n- textbox \"PAN\" [ref=e4]\n- textbox \"Due date\" [ref=e5]\n- button \"Save\" [ref=e6]",
+    "full": "- heading \"New invoice\" [level=1, ref=e1]\n- generic\n  - LabelText\n    - StaticText \"Customer name\"\n  - textbox \"Customer name\" [ref=e2]\n  - LabelText\n    - StaticText \"GST number\"\n  - textbox \"GST number\" [ref=e3]\n  - LabelText\n    - StaticText \"PAN\"\n  - textbox \"PAN\" [ref=e4]\n  - LabelText\n    - StaticText \"Due date\"\n  - textbox \"Due date\" [ref=e5]\n  - alert\n  - button \"Save\" [ref=e6]\n- status"
+  },
+  "form-missing-typed": {
+    "url": "http://127.0.0.1:8792/form-missing.html",
+    "title": "New invoice",
+    "snapshot": "- heading \"New invoice\" [level=1, ref=e1]\n- textbox \"Customer name\" [ref=e2]: Acme\n- textbox \"GST number\" [ref=e3]\n- textbox \"PAN\" [ref=e4]\n- textbox \"Due date\" [ref=e5]\n- button \"Save\" [ref=e6]",
+    "full": "- heading \"New invoice\" [level=1, ref=e1]\n- generic\n  - LabelText\n    - StaticText \"Customer name\"\n  - textbox \"Customer name\" [ref=e2]: Acme\n    - StaticText \"Acme\"\n  - LabelText\n    - StaticText \"GST number\"\n  - textbox \"GST number\" [ref=e3]\n  - LabelText\n    - StaticText \"PAN\"\n  - textbox \"PAN\" [ref=e4]\n  - LabelText\n    - StaticText \"Due date\"\n  - textbox \"Due date\" [ref=e5]\n  - alert\n  - button \"Save\" [ref=e6]\n- status"
+  },
+  "delete-confirm": {
+    "url": "http://127.0.0.1:8792/delete-confirm.html",
+    "title": "Delete 40 records",
+    "snapshot": "- heading \"Delete 40 records\" [level=1, ref=e1]\n- textbox \"Type DELETE to remove 40 records\" [ref=e2]: DELETE\n- button \"Delete\" [ref=e3]",
+    "full": "- heading \"Delete 40 records\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"This cannot be undone.\"\n- generic\n  - LabelText\n    - StaticText \"Type DELETE to remove 40 records\"\n  - textbox \"Type DELETE to remove 40 records\" [ref=e2]: DELETE\n    - StaticText \"DELETE\"\n  - alert\n  - button \"Delete\" [ref=e3]\n- status"
+  },
+  "deleted": {
+    "url": "http://127.0.0.1:8792/deleted.html",
+    "title": "Records deleted",
+    "snapshot": "- heading \"Deleted 40 records\" [level=1, ref=e1]",
+    "full": "- heading \"Deleted 40 records\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"The records are gone.\""
+  },
+  "error-500": {
+    "url": "http://127.0.0.1:8792/error-500.html",
+    "title": "Something went wrong",
+    "snapshot": "- heading \"Something went wrong\" [level=1, ref=e1]\n- link \"Try again\" [ref=e2]",
+    "full": "- heading \"Something went wrong\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Error 500. The server could not complete your request.\"\n- link \"Try again\" [ref=e2]",
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8792/error-500.html",
+        "status": 500,
+        "resourceType": "Document",
+        "mimeType": "text/html",
+        "timestamp": 1
+      }
+    ]
+  },
+  "rate-limit": {
+    "url": "http://127.0.0.1:8792/rate-limit.html",
+    "title": "Too many requests",
+    "snapshot": "- heading \"Too many requests\" [level=1, ref=e1]\n- link \"Try again\" [ref=e2]",
+    "full": "- heading \"Too many requests\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Too many requests, try again in 30 s.\"\n- link \"Try again\" [ref=e2]",
+    "requests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:8792/rate-limit.html",
+        "status": 429,
+        "resourceType": "Document",
+        "mimeType": "text/html",
+        "timestamp": 1,
+        "retryAfter": 30
+      }
+    ]
+  },
+  "home": {
+    "url": "http://127.0.0.1:8792/home.html",
+    "title": "Home",
+    "snapshot": "- heading \"Signed in\" [level=1, ref=e1]",
+    "full": "- heading \"Signed in\" [level=1, ref=e1]\n- paragraph\n  - StaticText \"Welcome back. You are on the home page.\""
+  }
+}
