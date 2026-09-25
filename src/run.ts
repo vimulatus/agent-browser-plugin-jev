@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
-import { blockerOf, networkBlocker, type Blocker, type Cause } from "./blocker.js";
+import { blockerOf, blocksBeforeActing, networkBlocker, type Blocker, type Cause } from "./blocker.js";
 import { openRun, StoreFull } from "./cap.js";
 import { decide, THRESHOLD, type Allow, type Decision, type Recent } from "./decide.js";
 import { findingAt, summarize, type WalkFinding } from "./findings.js";
@@ -422,10 +422,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
         model: decision.model,
       };
 
-      const stalled = stalledOn(decision, observation.url, clicked);
+      const early = blocksBeforeActing(decision, observation);
+      const stalled = early ?? stalledOn(decision, observation.url, clicked);
       if (stalled !== null) {
         if (!options.handoff || !loginPage(observation)) {
-          if (decision.operation === "TYPE_TEXT") cause = "no_value";
+          if (early === null && decision.operation === "TYPE_TEXT") cause = "no_value";
           reason = step.reason = stalled;
           await write("running", step);
           break;

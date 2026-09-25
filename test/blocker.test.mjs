@@ -8,8 +8,12 @@ import { isolatedScopes, lab, lines, scriptedBrowser, scriptedJev } from "./help
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "console", "errors", "network requests"]);
 
-/** Runs `goal` over lab pages, one scripted Jev intent per step, with a policy Jev that must never be asked. */
-export async function labRun(t, pages, intents, goal, overrides = {}) {
+/** Runs `goal` over lab pages by name, one scripted Jev intent per step, with a policy Jev that must never be asked. */
+export function labRun(t, names, intents, goal, overrides = {}) {
+  return labRunPages(t, lab(...names), intents, goal, overrides);
+}
+
+export async function labRunPages(t, pages, intents, goal, overrides = {}) {
   const scopes = isolatedScopes();
   const options = {
     goal,
@@ -24,12 +28,12 @@ export async function labRun(t, pages, intents, goal, overrides = {}) {
     ...overrides,
   };
   t.after(() => rmSync(options.out, { recursive: true, force: true }));
-  const browser = scriptedBrowser(lab(...pages));
+  const browser = scriptedBrowser(pages);
   const jev = scriptedJev(intents);
   const policyJev = { ask: async () => assert.fail("no policy") };
   const result = await run(options, { browser, jev, policyJev, scopes });
   const status = JSON.parse(readFileSync(join(options.out, "status.json"), "utf8"));
-  const acts = browser.state.calls.filter((call) => !READS.has(call));
+  const acts = browser.state.calls.filter((call) => !READS.has(call)).map((call) => call.replace(/^state (save|load) .*/, "state $1 <file>"));
   return { result, status, jev, acts, out: options.out };
 }
 
@@ -57,7 +61,11 @@ test("an identifier-first sign-in with nothing to type blocks as sign_in, naming
 
 test("a page waiting on a push approval blocks as approval, with no fields", async (t) => {
   const { result } = await labRun(t, ["push-approve"], [{ operation: "BLOCKED", kind: "approval" }], "open my invoices");
-  assert.deepEqual(result.blocker, { kind: "approval", fields: [], reason: "no supported operation can make progress" });
+  assert.deepEqual(result.blocker, {
+    kind: "approval",
+    fields: [],
+    reason: "the page waits for the user to approve on another device",
+  });
 });
 
 test("a captcha blocks as captcha, with no fields", async (t) => {
@@ -85,7 +93,7 @@ test("a field the goal holds no value for is missing_value, whatever else Jev ju
   const { result } = await labRun(
     t,
     ["form-missing"],
-    [{ operation: "TYPE_TEXT", target: "2", kind: "captcha" }],
+    [{ operation: "TYPE_TEXT", target: "2", kind: "error_page" }],
     "create an invoice for customer Acme",
   );
   assert.equal(result.blocker.kind, "missing_value");
@@ -102,7 +110,7 @@ test("a refused destructive click blocks as permission, and the kind costs no qu
   const { result, jev, acts } = await labRun(
     t,
     ["delete-confirm"],
-    [{ operation: "CLICK", target: "2", destructive: 0.95, verb: "delete", kind: "captcha" }],
+    [{ operation: "CLICK", target: "2", destructive: 0.95, verb: "delete", kind: "unknown" }],
     'type "DELETE" and delete the 40 records',
   );
   assert.deepEqual(acts, [], "nothing clicked");
@@ -151,4 +159,50 @@ test("a page whose document returned 429 blocks as rate_limit, with its Retry-Af
     reason: "the page returned HTTP 429, retry after 30 s",
     retryAfter: 30,
   });
+});
+
+test("a magic-link page blocks at step 1 as sign_in, and Resend link is never clicked (#87)", async (t) => {
+  const { result, acts } = await labRun(
+    t,
+    ["magic-link"],
+    [{ operation: "CLICK", target: "1", kind: "sign_in" }],
+    "open my invoices",
+  );
+  assert.deepEqual(acts, []);
+  assert.equal(result.steps, 1);
+  assert.deepEqual(result.blocker, {
+    kind: "sign_in",
+    fields: [],
+    reason: "the page asks to sign in, and the goal holds nothing to sign in with",
+  });
+});
+
+test("a captcha page blocks at step 1 as captcha, and the box is never ticked (#87)", async (t) => {
+  const { result, acts } = await labRun(t, ["captcha"], [{ operation: "CLICK", target: "1", kind: "captcha" }], "open my invoices");
+  assert.deepEqual(acts, []);
+  assert.equal(result.steps, 1);
+  assert.equal(result.blocker.kind, "captcha");
+});
+
+test("a push-approval page blocks at step 1 as approval, even on a WAIT (#87)", async (t) => {
+  const { result, acts } = await labRun(t, ["push-approve"], [{ operation: "WAIT", kind: "approval" }], "open my invoices");
+  assert.deepEqual(acts, []);
+  assert.equal(result.blocker.kind, "approval");
+});
+
+test("an identifier-first sign-in whose email is in the goal goes on and ends done (#87)", async (t) => {
+  const [login, home] = lab("id-first-login", "home");
+  const typed = { ...login, snapshot: login.snapshot.replace('"Email" [ref=e2]', '"Email" [ref=e2]: alice@example.com') };
+  const { result, acts } = await labRunPages(
+    t,
+    [login, typed, home],
+    [
+      { operation: "TYPE_TEXT", target: "1", value: "alice@example.com", kind: "sign_in" },
+      { operation: "CLICK", target: "2", kind: "sign_in" },
+      { operation: "DONE" },
+    ],
+    "sign in as alice@example.com and open the home page",
+  );
+  assert.deepEqual(acts, ["fill @e2 alice@example.com", "click @e3", "state save <file>"]);
+  assert.equal(result.status, "done");
 });

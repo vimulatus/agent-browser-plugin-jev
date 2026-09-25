@@ -39,6 +39,23 @@ export function networkBlocker(page: Observation): Blocker | null {
   return null;
 }
 
+/**
+ * Why the run must not act on this page, whatever operation Jev picked, or null when it may: a captcha, a wait for
+ * approval, or a sign-in with nothing typed and nothing the goal can type, such as a magic-link page. Each act there counts as an
+ * attempt on a real app: a failed captcha, a resent email.
+ */
+export function blocksBeforeActing(decision: Decision, page: Observation): string | null {
+  const kind = judgedKind(decision);
+  if (kind === "captcha") return "the page asks to prove the user is a person";
+  if (kind === "approval") return "the page waits for the user to approve on another device";
+  if (kind !== "sign_in") return null;
+  const typing = decision.operation === "TYPE_TEXT" && decision.value !== null;
+  const fields = page.elements.filter((element) => element.operations.includes("TYPE_TEXT"));
+  const typed = fields.some((element) => (element.value ?? "").trim() !== "");
+  if (typing || typed || decision.unfilled().length < fields.length) return null;
+  return "the page asks to sign in, and the goal holds nothing to sign in with";
+}
+
 /** The kinds a value given to `resume` gets past. The rest need a person, a permission or time. */
 const TAKES_VALUES = new Set<BlockerKind>(["otp", "sign_in", "missing_value"]);
 
