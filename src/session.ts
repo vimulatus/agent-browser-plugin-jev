@@ -1,13 +1,12 @@
 import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
-import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Browser } from "./browser.js";
 import { activeScope, type Scopes } from "./scope.js";
 
 /** The store key every piece of a session's state sits under: `sessions/<session>`. */
 export function sessionKey(session: string): string {
-  if (session === "" || session === "." || session === ".." || /[/\\]/.test(session)) {
-    throw new Error(`session ${JSON.stringify(session)} names a directory, so it cannot be empty, "." or ".." or hold a / or \\`);
+  if (session === "" || session.startsWith(".") || /[/\\]/.test(session)) {
+    throw new Error(`session ${JSON.stringify(session)} names a directory, so it cannot be empty, start with "." or hold a / or \\`);
   }
   return `sessions/${session}`;
 }
@@ -29,8 +28,8 @@ export function newRunDir(scopes: Scopes, session: string, now = new Date()): st
 
 /**
  * `soab session reset <session>`: closes the session's browser, deletes its runs and its `auth.json` from the active
- * scope's store, then the sign-in the browser saved on close. `deleted` lists the session's directory and each saved
- * file it removed, and is empty when the session had no state.
+ * scope's store through the same `deleteTree` eviction uses, then the sign-in the browser saved on close. `deleted`
+ * lists the session's directory and each saved file it removed, and is empty when the session had no state.
  */
 export async function resetSession(
   scopes: Scopes,
@@ -40,11 +39,9 @@ export async function resetSession(
   const key = sessionKey(session);
   await browser.close();
   const { dir, store } = activeScope(scopes);
-  const keys = await store.list(`${key}/`);
-  for (const stored of keys) await store.delete(stored);
   const sessionDir = join(dir, key);
   const hadLocalDir = existsSync(sessionDir);
-  await rm(sessionDir, { recursive: true, force: true });
+  const keys = await store.deleteTree(`${key}/`);
   const saved = await browser.forgetSaved();
   return { session, deleted: [...(keys.length > 0 || hadLocalDir ? [sessionDir] : []), ...saved] };
 }

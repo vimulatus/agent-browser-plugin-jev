@@ -93,7 +93,7 @@ report:
 
 ## Read what it wrote
 
-Everything lands in `--out`, named in the result and in `status.json`. With no `--out`, each run of a session gets a new `sessions/<session>/runs/<timestamp>/` in `./.soab/` when the repo has one, else in `~/.soab/`; older runs of the session sit beside it.
+Everything lands in `--out`, named in the result and in `status.json`. With no `--out`, each run of a session gets a new `sessions/<session>/runs/<timestamp>/` in `./.soab/` when the repo has one, else in `~/.soab/`; older runs of the session sit beside it until `store.maxBytes` in `config.json` (1 GiB by default) evicts the least recently used runs, then sign-ins.
 
 - A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. `recordings` names every file a `--record` went to: two when a login window split it.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
