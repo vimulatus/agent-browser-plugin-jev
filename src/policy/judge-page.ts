@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openBrowser } from "../browser.js";
+import { NAME } from "../name.js";
 import { observe } from "../observe.js";
 import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
@@ -39,7 +40,7 @@ export async function judgePage({ session, policyPath, out, jev = typesafeJev() 
   const judged = await judgeFindings(policy, observation, gathered, applied, jev);
   const answered = [...inferences, ...judged.inferences];
   if (answered.length === 0) return { findings: judged.findings, durationMs: elapsed() };
-  const inferred = writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), "jev-")));
+  const inferred = writeInferred(answered, out ?? mkdtempSync(join(tmpdir(), `${NAME}-`)));
   return { findings: judged.findings, inferred, durationMs: elapsed() };
 }
 

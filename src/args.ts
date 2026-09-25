@@ -1,13 +1,14 @@
 import { resolve } from "node:path";
 import { DEFAULT_MODEL } from "./jev.js";
 import { LOGIN_TIMEOUT_MS } from "./login.js";
+import { NAME } from "./name.js";
 import { VERBS } from "./questions.js";
 import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
 
-export const USAGE = `jev
+export const USAGE = `${NAME}
 
-  jev run "<goal>" [options]
-  jev run --policy <file> [options]
+  ${NAME} run "<goal>" [options]
+  ${NAME} run --policy <file> [options]
 
 With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.

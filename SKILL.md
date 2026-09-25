@@ -1,39 +1,39 @@
 ---
-name: jev-browser
-description: Drive a browser from one goal, or judge what it shows from one policy file, with the `jev` command. Use when a task needs a browser taken to a page, a page checked for errors or slow requests, or an app walked for bugs with evidence. Not for a single browser command, which agent-browser runs on its own.
+name: soab
+description: Drive a browser from one goal, or judge what it shows from one policy file, with the `soab` command. Use when a task needs a browser taken to a page, a page checked for errors or slow requests, or an app walked for bugs with evidence. Not for a single browser command, which agent-browser runs on its own.
 ---
 
-# Jev
+# soab
 
 One command reaches a page. One policy file turns what the browser shows into findings you can report. Jev picks every action and answers every question, so you do not think between the steps.
 
 ## Install
 
 ```bash
-npm install -g agent-browser-plugin-jev
+npm install -g soab
 ```
 
-This puts `jev` on PATH. It needs the `agent-browser` binary on PATH too. From a clone: `pnpm install && pnpm build && npm link`, and `pnpm build` again after a `git pull`.
+This puts `soab` on PATH. It needs the `agent-browser` binary on PATH too. From a clone: `pnpm install && pnpm build && npm link`, and `pnpm build` again after a `git pull`.
 
-Export `TYPESAFE_API_KEY` in the shell that runs `jev`. A policy with no `judge` section needs no key.
+Export `TYPESAFE_API_KEY` in the shell that runs `soab`. A policy with no `judge` section needs no key.
 
 ## The three things it does
 
 ```bash
-export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix jev)"
+export AGENT_BROWSER_SESSION="$(agent-browser session id --scope worktree --prefix soab)"
 
 # 1. reach a page
-jev run "log in as alice@example.com with password secret and open Settings" \
+soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 
 # 2. judge the page the session is already on
-jev run --policy perf --max-steps 0
+soab run --policy perf --max-steps 0
 
 # 3. walk the app and write findings.json
-jev run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
+soab run --policy bug-hunt --url http://127.0.0.1:8765/ --allow all --max-steps 40
 ```
 
-The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open, stderr says `jev: sign in on the window at <url>` and `status.json` reads `status: "login"`: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A goal run does not apply `--policy`; use form 2 or form 3.
+The goal carries every value that gets typed: Jev writes no text. A login page the goal cannot fill is signed in another way: through a saved `agent-browser auth` profile for that page when one exists, else in a window the run opens for the person. While the window is open, stderr says `soab: sign in on the window at <url>` and `status.json` reads `status: "login"`: tell the person to sign in there. The run closes the window once they are through and goes on headless, signed in. `--login-timeout` bounds the wait, and `--no-handoff` ends an unattended run blocked at the login page instead. A goal run does not apply `--policy`; use form 2 or form 3.
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -50,7 +50,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--no-handoff` | | Ends the run blocked at a login page instead of opening a window for it |
 | `--login-timeout` | `<seconds>` | How long the window stays open for the person to sign in; default 300 |
 
-A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `jev: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
+A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
 
 ## Write a policy
 
