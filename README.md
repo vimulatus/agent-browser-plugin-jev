@@ -324,7 +324,7 @@ report:
 |---|---|
 | `errors` | A request that returned 500 or worse, an error the page threw, an error it logged. It asks Jev nothing, so it needs no key. `errors.yaml` |
 | `perf` | A request slower than a second that the page needs, told apart from a slow beacon or third party, and a page still showing a spinner. `perf.yaml` |
-| `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
+| `bug-hunt` | A control that does nothing or does the wrong thing, a 500, an uncaught page error or a console error, an error shown to the user, a page stuck loading. It judges the severity of each finding itself. `bug-hunt.yaml` |
 
 ## From an agent
 

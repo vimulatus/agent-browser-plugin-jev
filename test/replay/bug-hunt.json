@@ -28,6 +28,12 @@
       "severity#2": {
         "type": "choice",
         "choice": "medium",
+        "confidence": 0.61,
+        "probabilities": { "critical": 0.03, "high": 0.3, "medium": 0.61, "low": 0.06 }
+      },
+      "severity#3": {
+        "type": "choice",
+        "choice": "medium",
         "confidence": 0.55,
         "probabilities": { "critical": 0.05, "high": 0.36, "medium": 0.55, "low": 0.04 }
       }
@@ -48,6 +54,12 @@
         "probabilities": { "critical": 0.69, "high": 0.27, "medium": 0.03, "low": 0.01 }
       },
       "severity#1": {
+        "type": "choice",
+        "choice": "medium",
+        "confidence": 0.61,
+        "probabilities": { "critical": 0.03, "high": 0.3, "medium": 0.61, "low": 0.06 }
+      },
+      "severity#2": {
         "type": "choice",
         "choice": "medium",
         "confidence": 0.55,
