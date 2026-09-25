@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Replays one captured agent-browser session. JEV_FIXTURES holds a file per command: `snapshot -i` is snapshot-i.json,
 // and ${JEV_FIXTURES} in a reply becomes that directory, so a recorded file path points at the recorded file.
+// ${HOME} becomes the test's home, as agent-browser keeps its saved state under ~/.agent-browser.
 import { readFileSync } from "node:fs";
 
 const args = process.argv
@@ -8,4 +9,4 @@ const args = process.argv
   .filter((arg, at, all) => arg !== "--json" && arg !== "--session" && all[at - 1] !== "--session");
 const command = args.map((arg) => arg.replace(/^-+/, "")).join("-");
 const reply = readFileSync(`${process.env.JEV_FIXTURES}/${command}.json`, "utf8");
-process.stdout.write(reply.replaceAll("${JEV_FIXTURES}", process.env.JEV_FIXTURES));
+process.stdout.write(reply.replaceAll("${JEV_FIXTURES}", process.env.JEV_FIXTURES).replaceAll("${HOME}", process.env.HOME));

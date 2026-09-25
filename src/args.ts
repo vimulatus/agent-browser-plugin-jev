@@ -10,9 +10,15 @@ export const USAGE = `${NAME}
   ${NAME} run "<goal>" [options]
   ${NAME} run --policy <file> [options]
   ${NAME} init
+  ${NAME} session reset <session>
 
 init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
 to .gitignore. It is the project scope; ~/${STATE_DIR}/ is the global one.
+
+session reset closes the agent-browser session of that name, deletes its runs and
+its sign-in from the active scope and the sign-in agent-browser saved for it, then
+prints { session, deleted } as JSON. deleted lists what it removed, empty when the
+session had no state.
 
 With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.

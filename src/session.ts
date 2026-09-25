@@ -1,5 +1,7 @@
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import type { Browser } from "./browser.js";
 import { activeScope, type Scopes } from "./scope.js";
 
 /** The store key every piece of a session's state sits under: `sessions/<session>`. */
@@ -23,4 +25,26 @@ export function newRunDir(scopes: Scopes, session: string, now = new Date()): st
   const runs = join(activeScope(scopes).dir, sessionKey(session), "runs");
   mkdirSync(runs, { recursive: true });
   return mkdtempSync(join(runs, `${now.toISOString().replace(/[:.]/g, "-")}-`));
+}
+
+/**
+ * `soab session reset <session>`: closes the session's browser, deletes its runs and its `auth.json` from the active
+ * scope's store, then the sign-in the browser saved on close. `deleted` lists the session's directory and each saved
+ * file it removed, and is empty when the session had no state.
+ */
+export async function resetSession(
+  scopes: Scopes,
+  session: string,
+  browser: Browser,
+): Promise<{ session: string; deleted: string[] }> {
+  const key = sessionKey(session);
+  await browser.close();
+  const { dir, store } = activeScope(scopes);
+  const keys = await store.list(`${key}/`);
+  for (const stored of keys) await store.delete(stored);
+  const sessionDir = join(dir, key);
+  const hadLocalDir = existsSync(sessionDir);
+  await rm(sessionDir, { recursive: true, force: true });
+  const saved = await browser.forgetSaved();
+  return { session, deleted: [...(keys.length > 0 || hadLocalDir ? [sessionDir] : []), ...saved] };
 }

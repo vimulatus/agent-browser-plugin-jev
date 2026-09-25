@@ -84,6 +84,8 @@ export interface Browser {
   close(): Promise<void>;
   /** Launches a browser in a window on `url`, after `close`. */
   openWindow(url: string): Promise<void>;
+  /** Deletes the cookies and storage an earlier `--restore` launch saved for this session, and returns the files it deleted. Call it after `close`. */
+  forgetSaved(): Promise<string[]>;
 }
 
 /**

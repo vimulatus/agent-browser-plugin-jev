@@ -1,4 +1,7 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Act, AuthProfile, Browser, ConsoleMessage, PageError, Request } from "./browser.js";
 
@@ -123,5 +126,16 @@ export function agentBrowser(session: string, human = false, run: Run = agentBro
     signIn: (profile) => call("auth", "login", profile),
     close: () => call("close"),
     openWindow: (url) => call("open", url, "--headed"),
+    // A launch with `--restore <session>`, as the login handoff made before 0.3.0, makes agent-browser 0.38.1 save to
+    // `<directory>/<session>-<session>.json`, `.json.enc` when AGENT_BROWSER_ENCRYPTION_KEY is set; `state list` names
+    // the directory with HOME and AGENT_BROWSER_NAMESPACE applied. `state clear <name>` deletes every session's file, so each file goes by exact path.
+    async forgetSaved() {
+      const { directory } = (await run(["state", "list"])) as { directory: string };
+      const saved = [`${session}-${session}.json`, `${session}-${session}.json.enc`]
+        .map((name) => join(directory, name))
+        .filter((path) => existsSync(path));
+      for (const path of saved) await rm(path);
+      return saved;
+    },
   };
 }

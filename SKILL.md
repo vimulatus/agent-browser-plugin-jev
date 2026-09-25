@@ -56,6 +56,8 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 
 `--policy <name>` loads `<name>.yaml` from `./.soab/policies/`, else `~/.soab/policies/`, else the shipped policies. Put a repo's own policy in `./.soab/policies/` and run it by name. A path is read as a path.
 
+`soab session reset <session>` starts a session clean: it closes the agent-browser session of that name and deletes `sessions/<session>/`, its runs and its sign-in, from the active scope, and the sign-in agent-browser saved for that session after a login handoff. It prints `{ session, deleted }`, where `deleted` lists the directory and files it removed and is empty when there was nothing, and exits 0 either way.
+
 `config.json` from the project merges over the global one. `${VAR}` in a string reads the environment; an unset one is an error that names it.
 
 A run blocks until it ends and prints one JSON line on stdout. Its first stderr line is `soab: writing to <out>`, so a run you start in the background is read from `<out>/status.json` meanwhile.
