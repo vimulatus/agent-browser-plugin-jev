@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
-import { driven } from "./helpers.mjs";
+import { driven, isolatedScopes } from "./helpers.mjs";
 import { loadPolicy, applyPolicy } from "../dist/policy/index.js";
 
 // A page that logs one console error and fetches an endpoint that answers 500,
@@ -49,7 +49,7 @@ const FINDINGS = [
 
 test("the errors policy reports the 500 and the console error, and nothing else", async () => {
   const orders = await observe(driven({ run: async (args) => replies[args.join(" ")] }));
-  assert.deepEqual(applyPolicy(loadPolicy("errors"), orders), FINDINGS);
+  assert.deepEqual(applyPolicy(await loadPolicy("errors", isolatedScopes()), orders), FINDINGS);
 });
 
 test("run --policy errors --max-steps 0 prints those findings as JSON", () => {

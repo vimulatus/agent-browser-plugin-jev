@@ -4,7 +4,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { defaultOut } from "../dist/run.js";
 import { actionsBefore, walk } from "../dist/walk.js";
-import { driven, lines, replayingJev } from "./helpers.mjs";
+import { driven, isolatedScopes, lines, replayingJev } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "snapshot", "get title", "get url", "console", "errors", "network requests"]);
 
@@ -105,7 +105,7 @@ async function drive(name, { moves = {}, repro = {}, ...overrides } = {}) {
     policy: "errors",
     ...overrides,
   };
-  const result = await walk(options, { browser, repro: replay, jev, policyJev });
+  const result = await walk(options, { browser, repro: replay, jev, policyJev, scopes: isolatedScopes() });
   return { result, browser, repro: replay, jev, policyJev, out: options.out };
 }
 

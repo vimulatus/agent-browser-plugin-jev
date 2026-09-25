@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { agentBrowser } from "../dist/agent-browser.js";
+import { discoverScopes } from "../dist/scope.js";
 
 const ACTS = new Set(["click", "fill", "select", "scroll", "wait"]);
+
+/** Scopes over an empty temp home and working directory, so a policy by name resolves to the shipped one. */
+export function isolatedScopes() {
+  const home = mkdtempSync(join(tmpdir(), "soab-home-"));
+  const cwd = join(home, "work");
+  mkdirSync(cwd);
+  return discoverScopes({ cwd, home });
+}
 
 export function pages(name) {
   return JSON.parse(readFileSync(new URL("./fixtures/pages.json", import.meta.url), "utf8"))[name];

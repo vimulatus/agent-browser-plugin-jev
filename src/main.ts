@@ -3,12 +3,18 @@ import { parseRunArgs, USAGE, UsageError } from "./args.js";
 import { NAME } from "./name.js";
 import { judgePage, judgePageOptions } from "./policy/index.js";
 import { defaultOut, run } from "./run.js";
+import { init } from "./scope.js";
 import { walk, type WalkOptions } from "./walk.js";
 
 async function main(argv: string[]): Promise<number> {
   const judge = judgePageOptions(argv);
   if (judge) {
     process.stdout.write(`${JSON.stringify(await judgePage(judge))}\n`);
+    return 0;
+  }
+  if (argv[0] === "init") {
+    if (argv.length > 1) throw new UsageError(`init takes no arguments, not "${argv[1]}"`);
+    process.stdout.write(`${JSON.stringify(await init(process.cwd()))}\n`);
     return 0;
   }
   if (argv[0] === "run") {

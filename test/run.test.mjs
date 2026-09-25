@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { defaultOut, run } from "../dist/run.js";
-import { lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
+import { isolatedScopes, lines, pages, replay, replayingJev, scriptedBrowser } from "./helpers.mjs";
 
 const READS = new Set(["snapshot -i", "get title", "console", "errors", "network requests"]);
 
@@ -56,7 +56,7 @@ async function drive(name, goal, overrides = {}, advance) {
   const browser = scriptedBrowser(pages(scenario.pages), advance, run_options.human);
   const jev = replayingJev(replay(name));
   const policyJev = unaskedJev();
-  const result = await run(run_options, { browser, jev, policyJev });
+  const result = await run(run_options, { browser, jev, policyJev, scopes: isolatedScopes() });
   return { result, browser, jev, policyJev, out: run_options.out };
 }
 

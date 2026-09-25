@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
-import { driven } from "./helpers.mjs";
+import { driven, isolatedScopes } from "./helpers.mjs";
 import { parsePolicy, loadPolicy, applyPolicy } from "../dist/policy/index.js";
 
 function fixture(name) {
@@ -19,7 +19,7 @@ const replies = {
 };
 
 const login = await observe(driven({ run: async (args) => replies[args.join(" ")] }));
-const errors = loadPolicy(fileURLToPath(new URL("../policies/errors.yaml", import.meta.url)));
+const errors = await loadPolicy(fileURLToPath(new URL("../policies/errors.yaml", import.meta.url)), isolatedScopes());
 
 test("the errors policy loads with its four collections, one measure and three rules", () => {
   assert.equal(errors.name, "errors");

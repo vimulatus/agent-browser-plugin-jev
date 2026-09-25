@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
-import { driven } from "./helpers.mjs";
+import { driven, isolatedScopes } from "./helpers.mjs";
 import { applyPolicy, judge, loadPolicy, parsePolicy, readHar } from "../dist/policy/index.js";
 
 const PERF = fileURLToPath(new URL("./fixtures/perf/", import.meta.url));
@@ -32,7 +32,7 @@ function replay(answers) {
   };
 }
 
-const perf = loadPolicy(fileURLToPath(new URL("../policies/perf.yaml", import.meta.url)));
+const perf = await loadPolicy(fileURLToPath(new URL("../policies/perf.yaml", import.meta.url)), isolatedScopes());
 const products = await observe(
   browser({
     "snapshot -i": reply(PERF, "snapshot-i"),
@@ -152,7 +152,7 @@ test("a policy with no judge section makes no Jev call", async () => {
       throw new Error("the errors policy must not ask Jev anything");
     },
   };
-  assert.deepEqual(await judge(loadPolicy("errors"), products, {}, refuse), []);
+  assert.deepEqual(await judge(await loadPolicy("errors", isolatedScopes()), products, {}, refuse), []);
 });
 
 test("over: element asks one question per element of the snapshot", async () => {

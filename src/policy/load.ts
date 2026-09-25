@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
+import { inOrder, type Scopes } from "../scope.js";
+import { localStore } from "../store.js";
 import { parseWhen, pathsOf as pathsOfWhen, type Expression } from "./expression.js";
 import type { Facts } from "./facts.js";
 import { formatPath, type Path } from "./path.js";
@@ -97,19 +100,29 @@ const EVIDENCE: { prefix: Path; key: string }[] = [
   { prefix: ["elements"], key: "element" },
 ];
 
-const POLICIES_DIR = fileURLToPath(new URL("../../policies/", import.meta.url));
+/** The package root as a store, read-only: the policies that ship sit under the same `policies/` key. */
+const SHIPPED = localStore(fileURLToPath(new URL("../../", import.meta.url)));
 
-/** The path as given, or a policy shipped with the package by name (`errors`, `errors.yaml`). */
-function resolvePolicyPath(name: string): string {
-  if (existsSync(name)) return name;
-  const shipped = `${POLICIES_DIR}${name.endsWith(".yaml") ? name : `${name}.yaml`}`;
-  if (existsSync(shipped)) return shipped;
-  throw new Error(`policy ${name}: no such file, and no shipped policy by that name`);
+/**
+ * A path as given, or a policy by name (`errors`, `errors.yaml`) from the project scope, then the global scope,
+ * then the policies that ship.
+ */
+export async function loadPolicy(name: string, scopes: Scopes): Promise<Policy> {
+  if (existsSync(name)) return parsePolicy(readFileSync(name, "utf8"), name);
+  const file = name.endsWith(".yaml") ? name : `${name}.yaml`;
+  const key = `policies/${file}`;
+  for (const scope of inOrder(scopes)) {
+    const bytes = await scope.store.get(key);
+    if (bytes !== null) return parsePolicy(decode(bytes), join(scope.dir, key));
+  }
+  const shipped = await SHIPPED.get(key);
+  if (shipped !== null) return parsePolicy(decode(shipped), key);
+  const places = inOrder(scopes).map((scope) => join(scope.dir, "policies"));
+  throw new Error(`policy ${name}: no such file, and no ${file} in ${places.join(", ")} or the shipped policies`);
 }
 
-export function loadPolicy(name: string): Policy {
-  const path = resolvePolicyPath(name);
-  return parsePolicy(readFileSync(path, "utf8"), path);
+function decode(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { DEFAULT_MODEL } from "./jev.js";
 import { LOGIN_TIMEOUT_MS } from "./login.js";
-import { NAME } from "./name.js";
+import { NAME, STATE_DIR } from "./name.js";
 import { VERBS } from "./questions.js";
 import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
 
@@ -9,6 +9,10 @@ export const USAGE = `${NAME}
 
   ${NAME} run "<goal>" [options]
   ${NAME} run --policy <file> [options]
+  ${NAME} init
+
+init creates ./${STATE_DIR}/ with config.json and policies/, and adds ${STATE_DIR}/sessions/
+to .gitignore. It is the project scope; ~/${STATE_DIR}/ is the global one.
 
 With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked.
@@ -21,7 +25,8 @@ once, and writes findings.json. --max-steps 0 judges the current page instead.
   --out <dir>        Run artifacts; default a fresh directory under the temp dir
   --allow <verbs>    Let the run ${Object.keys(VERBS).join(", ")}; or all
   --model <name>     System One model; default ${DEFAULT_MODEL}
-  --policy <file>    Judge every step against this policy, by path or by name
+  --policy <file>    Judge every step against this policy, by path or by name:
+                     ./${STATE_DIR}/policies/, then ~/${STATE_DIR}/policies/, then shipped
   --fixtures <file>  Values a walk types into forms; overrides the built-in keys
   --record <file>    Record the run to this .webm or .mp4, cursor included
   --human            Move the pointer along a curve instead of jumping

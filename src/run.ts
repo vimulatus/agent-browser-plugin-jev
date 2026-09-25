@@ -8,6 +8,7 @@ import { findingAt, summarize, type WalkFinding } from "./findings.js";
 import { DEFAULT_MODEL, httpJev, type Jev } from "./jev.js";
 import { authProfileFor, handoff, loginPage } from "./login.js";
 import { NAME } from "./name.js";
+import { discoverScopes, type Scopes } from "./scope.js";
 import { observe, snapshotHash, type Observation } from "./observe.js";
 import {
   applyPolicy,
@@ -72,6 +73,8 @@ export interface Deps {
   browser: Browser;
   jev: Jev;
   policyJev: PolicyJev;
+  /** Where `--policy` looks up a name; discovered from the working directory and home when absent. */
+  scopes?: Scopes;
 }
 
 interface Step {
@@ -144,9 +147,9 @@ function logged(decision: Decision): string | null {
  * The policy the run judges every step against, or null with no `--policy`. A HAR is recorded over a reload,
  * which a run that is driving the page cannot do, so a policy that collects one is refused here.
  */
-function policyOf(options: RunOptions): Policy | null {
+async function policyOf(options: RunOptions, scopes?: Scopes): Promise<Policy | null> {
   if (options.policy === undefined) return null;
-  const policy = loadPolicy(options.policy);
+  const policy = await loadPolicy(options.policy, scopes ?? discoverScopes());
   if (policy.collect.includes("har")) {
     throw new Error(
       `policy ${options.policy}: a HAR is recorded over a reload, which a goal run cannot do; judge one page with --max-steps 0`,
@@ -187,7 +190,7 @@ function recent(history: Step[]): Recent[] {
  */
 export async function run(options: RunOptions, injected?: Deps): Promise<RunResult> {
   const elapsed = stopwatch();
-  const policy = policyOf(options);
+  const policy = await policyOf(options, injected?.scopes);
   const findingsFile = policy === null ? undefined : resolve(options.out, "findings.json");
   const spans = valueSpans(options.goal);
   const history: Step[] = [];

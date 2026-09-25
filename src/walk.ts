@@ -22,6 +22,7 @@ import {
 } from "./policy/index.js";
 import { reproduce } from "./repro.js";
 import { MASK, type RunOptions, type RunStatus } from "./run.js";
+import { discoverScopes, type Scopes } from "./scope.js";
 import type { Operation } from "./snapshot.js";
 import { stopwatch } from "./stopwatch.js";
 /** A walk is a run with a policy and no goal. */
@@ -68,6 +69,8 @@ export interface WalkDeps {
   repro: Browser;
   jev: Jev;
   policyJev: PolicyJev;
+  /** Where `--policy` looks up a name; discovered from the working directory and home when absent. */
+  scopes?: Scopes;
 }
 
 /**
@@ -112,7 +115,7 @@ export function actionsBefore(out: string, step: number, count = 3): WalkStep[] 
  */
 export async function walk(options: WalkOptions, injected?: WalkDeps): Promise<WalkResult> {
   const elapsed = stopwatch();
-  const policy = loadPolicy(options.policy);
+  const policy = await loadPolicy(options.policy, injected?.scopes ?? discoverScopes());
   if (policy.collect.includes("har")) {
     throw new Error(
       `policy ${options.policy}: a HAR is recorded over a reload, which a walk cannot do; judge one page with --max-steps 0`,
