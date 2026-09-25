@@ -194,14 +194,13 @@ soab run "log in as alice@example.com with password secret and open Settings" \
 
 ## Judge one page
 
-`--max-steps 0` observes the page the session is on, applies the policy once and moves nothing:
+`--max-steps 0` opens `--url` when you give one, else stays on the page the session is on, observes it, applies the policy once and moves nothing:
 
 ```bash
-agent-browser --session soab-check open http://127.0.0.1:8765/orders.html
-soab run --policy perf --max-steps 0 --session soab-check
+soab run --policy perf --url http://127.0.0.1:8765/orders.html --max-steps 0 --session soab-check
 ```
 
-It prints `{ findings, inferred, durationMs }`: the findings the rules raised, the path of the file holding every answer Jev gave, and how long the command took. A policy with no `judge` section prints the findings alone, because it asked nothing. This is the one form that reads `--policy`, `--max-steps`, `--session` and `--out` and nothing else, because it takes no action: `--allow`, `--fixtures`, `--record` and `--human` have nothing to do.
+It prints `{ status, url, findings, findingsFile, inferred, out, durationMs }`: `done`, the page it judged, the findings the rules raised, the absolute path of `findings.json`, the path of the file holding every answer Jev gave, the run directory, and how long the command took. A policy with no `judge` section leaves out `inferred`, because it asked nothing. Like every run it names `<out>` on stderr first and writes `findings.json`, laid out as a walk's with `step: 0`, and `status.json`; it exits 0, and 1 with `status: "failed"` when it could not judge. It takes the flags of any run, and `--allow`, `--fixtures`, `--record` and `--human` have nothing to do, because it takes no action. A policy never asks Jev about an `about:` page, so a session that has opened nothing yet raises no finding.
 
 ## Walk an app
 

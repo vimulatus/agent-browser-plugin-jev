@@ -5,4 +5,4 @@ export { loadPolicy, parsePolicy, type Judgment, type Over, type Policy, type Sc
 export { judge, judgeFindings, questionId, type Inference } from "./judge.js";
 export { readHar, recordHar } from "./har.js";
 export { typesafeJev, type Answer, type Jev, type Question } from "./jev.js";
-export { judgePage, judgePageOptions, type Judged, type JudgePageOptions } from "./judge-page.js";
+export { judgePage, type Judged, type JudgePageOptions } from "./judge-page.js";

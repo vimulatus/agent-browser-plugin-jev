@@ -43,7 +43,8 @@ With a goal it drives the browser to it, one Jev request per step, and prints
 { status, url, steps, snapshot, out } as JSON. Exit 0 when done, 2 when blocked,
 3 when stopped.
 With a policy and no goal it walks the app from --url, trying every control
-once, and writes findings.json. --max-steps 0 judges the current page instead.
+once, and writes findings.json. --max-steps 0 judges the --url page, or the
+current one, instead.
 
   --url <url>        Open this page before the first step
   --session <name>   agent-browser session; default $AGENT_BROWSER_SESSION
