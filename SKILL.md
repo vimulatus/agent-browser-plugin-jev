@@ -40,7 +40,7 @@ The goal carries every value that gets typed: Jev writes no text. A login page t
 | `--url` | `<url>` | Opens this page before the first step |
 | `--session` | `<name>` | The agent-browser session; default `$AGENT_BROWSER_SESSION` |
 | `--max-steps` | `<n>` | Stops after n steps; default 60. `0` judges the page and moves nothing |
-| `--out` | `<dir>` | Where the run writes; default a fresh directory under the temp dir |
+| `--out` | `<dir>` | Where the run writes; default a new `.soab/sessions/<session>/runs/<timestamp>/` |
 | `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, or `all` |
 | `--model` | `<name>` | The System One model; default `jev-latest` |
 | `--policy` | `<file>` | A path, or a name: `./.soab/policies/`, then `~/.soab/policies/`, then shipped `errors`, `perf`, `bug-hunt` |
@@ -91,7 +91,7 @@ report:
 
 ## Read what it wrote
 
-Everything lands in `--out`, named in the result and in `status.json`.
+Everything lands in `--out`, named in the result and in `status.json`. With no `--out`, each run of a session gets a new `sessions/<session>/runs/<timestamp>/` in `./.soab/` when the repo has one, else in `~/.soab/`; older runs of the session sit beside it.
 
 - A goal run prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` and exits 0 when done, 2 when blocked. `recordings` names every file a `--record` went to: two when a login window split it.
 - `--max-steps 0` prints `{ findings, inferred, durationMs }`.
