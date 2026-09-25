@@ -35,6 +35,35 @@ export TYPESAFE_API_KEY=...
 
 Export it in the shell that runs `soab`. A policy with no `judge` section asks Jev nothing and needs no key.
 
+## Scopes
+
+soab keeps its state in two scopes, like Claude Code does:
+
+- **global**, `~/.soab/`, for every repo on the machine
+- **project**, `./.soab/`, found by walking up from the working directory. It wins over the global scope
+
+```bash
+soab init
+```
+
+`soab init` makes the current directory a project: it creates `./.soab/` with a `config.json` and an empty `policies/`, and adds `.soab/sessions/` to `.gitignore`, so the rest of `.soab/` can be committed. It prints `{ dir, created }` as JSON. Running it again changes nothing.
+
+`--policy <name>` looks for `<name>.yaml` in three places, and loads the first it finds:
+
+1. the project's `./.soab/policies/`
+2. the global `~/.soab/policies/`
+3. the policies that ship with soab
+
+So a `./.soab/policies/perf.yaml` replaces the shipped `perf` for that repo, and deleting it brings the shipped one back. A path such as `./checks/mine.yaml` is read as a path.
+
+`config.json` in the project merges over the one in `~/.soab/`, key by key. A string in it can read the environment with `${VAR}`, so the file can be committed with no secret in it. A `${VAR}` that is not set is an error that names it. Nothing reads `config.json` during a run yet: the store settings in it arrive with the storage cap and the remote store.
+
+```json
+{ "store": { "type": "local", "headers": { "Authorization": "Bearer ${STORE_TOKEN}" } } }
+```
+
+Each scope keeps its state in a store, under keys like `policies/<policy>.yaml`. The local store, the only one today, keeps each key as a file in the scope directory.
+
 ## Run a goal
 
 ```bash
@@ -53,7 +82,7 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 | `--out` | `<dir>` | Where the run writes its artifacts; default a fresh directory under the temp dir |
 | `--allow` | `<verbs>` | Lets the run `delete`, `send`, `pay`, `publish` or `submit`, comma separated, or `all` |
 | `--model` | `<name>` | The System One model; default `jev-latest` |
-| `--policy` | `<file>` | The policy to judge with, by path or by shipped name |
+| `--policy` | `<file>` | The policy to judge with, by path or by name: project, then global, then shipped |
 | `--fixtures` | `<file>` | The values a walk types into forms; replaces a built-in key or adds one |
 | `--record` | `<file>` | Records the run to this `.webm` or `.mp4`, cursor included |
 | `--human` | | Moves the pointer along a curve instead of jumping to each target |
@@ -130,7 +159,7 @@ The replay runs on a session named `<session>-repro`, so it disturbs nothing the
 
 ## Policy files
 
-A policy is a YAML file with four sections under an optional `name`. `--policy` takes a path, or the name of a policy that ships with the package.
+A policy is a YAML file with four sections under an optional `name`. `--policy` takes a path, or a name it looks up in `./.soab/policies/`, then `~/.soab/policies/`, then among the policies that ship with the package.
 
 ### collect
 

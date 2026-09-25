@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { observe } from "../dist/observe.js";
-import { driven } from "./helpers.mjs";
+import { driven, isolatedScopes } from "./helpers.mjs";
 import { applyPolicy, judge, judgeFindings, judgePage, loadPolicy } from "../dist/policy/index.js";
 
 // An orders page that answers 500 on load, shows a "Something went wrong" banner and has a Save button that only
@@ -48,7 +48,7 @@ function replay(...recorded) {
   };
 }
 
-const policy = loadPolicy("bug-hunt");
+const policy = await loadPolicy("bug-hunt", isolatedScopes());
 const orders = await observe(driven({ run: async (args) => replies[args.join(" ")] }));
 const content = replies.snapshot.snapshot;
 const previous = { hash: orders.hash, action: { kind: "CLICK", label: "Save" } };
@@ -158,7 +158,7 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
   const out = mkdtempSync(join(tmpdir(), "jev-bug-hunt-"));
   const jevPage = replay(RECORDED.page_only, RECORDED.page_only_findings);
 
-  const result = await judgePage({ session: "bug-hunt", policyPath: "bug-hunt", out, jev: jevPage });
+  const result = await judgePage({ session: "bug-hunt", policyPath: "bug-hunt", out, jev: jevPage, scopes: isolatedScopes() });
 
   assert.equal(jevPage.calls.length, 2);
   assert.deepEqual(
@@ -183,9 +183,11 @@ test("run --policy bug-hunt --max-steps 0 collects the content, judges twice and
 // A title says what the user can see happening. What made it happen is the reader's job, not Jev's.
 const CAUSAL = [/because/i, /due to/i, /caused by/i, /bug in/i];
 
-test("every title of every shipped policy names a behaviour and none names a cause", () => {
-  const titles = ["bug-hunt", "errors", "perf"].flatMap((name) =>
-    loadPolicy(name).rules.map((rule) => rule.title.filter((part) => typeof part === "string").join(" ")),
+test("every title of every shipped policy names a behaviour and none names a cause", async () => {
+  const scopes = isolatedScopes();
+  const policies = await Promise.all(["bug-hunt", "errors", "perf"].map((name) => loadPolicy(name, scopes)));
+  const titles = policies.flatMap((policy) =>
+    policy.rules.map((rule) => rule.title.filter((part) => typeof part === "string").join(" ")),
   );
   assert.equal(titles.length, 10);
   for (const title of titles) for (const cause of CAUSAL) assert.doesNotMatch(title, cause);

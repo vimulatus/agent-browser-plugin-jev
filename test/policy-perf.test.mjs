@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { judgePage, recordHar } from "../dist/policy/index.js";
-import { driven } from "./helpers.mjs";
+import { driven, isolatedScopes } from "./helpers.mjs";
 
 // A page whose /api/products takes 2.5 s and whose analytics beacon takes 1.2 s,
 // captured from agent-browser 0.38.1 against a local server, with the Jev reply jev-1.13.0 gave for it.
@@ -22,6 +22,7 @@ test("run --policy perf --max-steps 0 reports the slow API, not the slow beacon,
     session: "perf",
     policyPath: "perf",
     out,
+    scopes: isolatedScopes(),
     jev: { ask: async () => RECORDED.answers },
   });
 
@@ -61,6 +62,7 @@ test("a policy with no judge section writes no inferred.jsonl", async () => {
   const judged = await judgePage({
     session: "perf",
     policyPath: fileURLToPath(new URL("./fixtures/perf-latency-only.yaml", import.meta.url)),
+    scopes: isolatedScopes(),
     jev: {
       ask: async () => {
         throw new Error("a policy with no judge section must not ask Jev anything");
@@ -79,11 +81,13 @@ test("judging one page carries durationMs, with a judge section and without one"
     session: "perf",
     policyPath: "perf",
     out: mkdtempSync(join(tmpdir(), "jev-perf-")),
+    scopes: isolatedScopes(),
     jev: { ask: async () => RECORDED.answers },
   });
   const unasked = await judgePage({
     session: "perf",
     policyPath: fileURLToPath(new URL("./fixtures/perf-latency-only.yaml", import.meta.url)),
+    scopes: isolatedScopes(),
     jev: { ask: async () => assert.fail("a policy with no judge section must not ask Jev anything") },
   });
 
@@ -98,6 +102,7 @@ test("--out names a directory the run creates, so a path that does not exist yet
     session: "perf",
     policyPath: "perf",
     out,
+    scopes: isolatedScopes(),
     jev: { ask: async () => RECORDED.answers },
   });
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openBrowser } from "../browser.js";
 import { NAME } from "../name.js";
+import { discoverScopes, type Scopes } from "../scope.js";
 import { observe } from "../observe.js";
 import { stopwatch } from "../stopwatch.js";
 import { applyPolicy, type Finding } from "./apply.js";
@@ -17,6 +18,8 @@ export interface JudgePageOptions {
   policyPath: string;
   out?: string;
   jev?: Jev;
+  /** Where the policy is looked up by name; discovered from the working directory and home when absent. */
+  scopes?: Scopes;
 }
 
 /** The findings, and where the answers Jev gave were written when the policy judged. */
@@ -27,9 +30,9 @@ export interface Judged {
 }
 
 /** `run --policy <file> --max-steps 0`: observe the current page once and apply the policy. */
-export async function judgePage({ session, policyPath, out, jev = typesafeJev() }: JudgePageOptions): Promise<Judged> {
+export async function judgePage({ session, policyPath, out, jev = typesafeJev(), scopes }: JudgePageOptions): Promise<Judged> {
   const elapsed = stopwatch();
-  const policy = loadPolicy(policyPath);
+  const policy = await loadPolicy(policyPath, scopes ?? discoverScopes());
   const browser = openBrowser(session);
   const har = policy.collect.includes("har") ? await recordHar(browser) : undefined;
   const content = policy.collect.includes("content") ? await readContent(browser) : undefined;
