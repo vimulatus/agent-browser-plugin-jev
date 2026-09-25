@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { capped, DEFAULT_MAX_BYTES, maxBytesOf, runFiles } from "../dist/cap.js";
 import { localStore } from "../dist/store.js";
+import { loadAuth } from "../dist/auth.js";
 import { isolatedScopes, replay, replayingJev, scriptedBrowser, pages } from "./helpers.mjs";
 import { run } from "../dist/run.js";
 import { activeScope } from "../dist/scope.js";
@@ -191,4 +192,30 @@ test("session reset deletes through the store, so the store forgets when the ses
   assert.deepEqual(await store.entries("sessions/"), []);
   fill(activeScope(scopes).dir, "sessions/checkout/runs/1/status.json", 10);
   assert.equal((await store.entries("sessions/"))[0].lastUsed, 0);
+});
+
+test("rewriting a status near the cap replaces it in place rather than evict another run for a second copy", async () => {
+  const dir = storeDir();
+  const store = localStore(dir);
+  fill(dir, "policies/big.yaml", 50 * MB);
+  fill(dir, "sessions/a/runs/1/status.json", 30 * MB);
+  const own = "sessions/b/runs/1/";
+  const files = runFiles(join(dir, own), dir, store, 100 * MB);
+  await files.writeJson("status.json", "x".repeat(10 * MB - 3));
+  assert.equal(await held(store), 90 * MB);
+
+  await files.writeJson("status.json", "y".repeat(10 * MB - 3));
+  assert.equal(existsSync(join(dir, "sessions/a/runs/1/status.json")), true);
+  assert.equal(await held(store), 90 * MB);
+  assert.match(readFileSync(join(dir, own, "status.json"), "utf8"), /^"y/);
+});
+
+test("loading a session's sign-in records it as used", async () => {
+  const scopes = isolatedScopes();
+  const { store } = activeScope(scopes);
+  await store.put("sessions/checkout/auth.json", "{}");
+  await store.touch("sessions/checkout/auth.json", MONDAY);
+  await loadAuth(store, "checkout", { loadState: async () => {} });
+  const [auth] = await store.entries("sessions/checkout/auth.json");
+  assert.ok(auth.lastUsed > MONDAY.getTime());
 });

@@ -23,13 +23,18 @@ export interface CappedStore extends Store {
    * `last` write of a run may use the room the run keeps spare.
    */
   reserve(bytes: number, last?: boolean): Promise<void>;
+  /** Reserves `bytes` more only when they fit without evicting anything. */
+  reserveIfFree(bytes: number, last?: boolean): Promise<boolean>;
   /** Gives back room a write reserved and then freed, such as the old copy of a file it replaced. */
   release(bytes: number): Promise<void>;
   /** Measures a key something else already wrote, evicting to fit it. When it cannot fit, deletes it and throws. */
   admit(key: string): Promise<void>;
 }
 
-/** Room a running run keeps free under the cap, so its last status still fits once the cap has refused a write. */
+/**
+ * Room a running run keeps free under the cap, so its last status still fits once the cap has refused a write. A
+ * cap under twice this keeps half of itself free.
+ */
 export const SPARE_BYTES = 4096;
 
 const RUN = /^sessions\/[^/]+\/runs\/[^/]+\//;
@@ -75,20 +80,26 @@ export class StoreFull extends Error {
 
 /**
  * The store under a cap of `maxBytes`. `keep` is the key prefix of the run that is writing, which is never evicted
- * while it runs, and which keeps `SPARE_BYTES` free for its last write. The bytes held are measured from the store, then counted up by every reservation, so the count
- * never falls below the truth; the store is measured again only when a write would pass the cap.
+ * while it runs, and which keeps `SPARE_BYTES` free for its last write. The bytes held are measured from the store,
+ * then counted up by every reservation, so the count never falls below the truth; the store is measured again only
+ * when a write would pass the cap.
  */
 export function capped(store: Store, maxBytes: number, keep?: string): CappedStore {
   let counted: number | null = null;
-  const limitOf = (last: boolean) => (keep === undefined || last ? maxBytes : maxBytes - SPARE_BYTES);
+  const spare = Math.min(SPARE_BYTES, Math.floor(maxBytes / 2));
+  const limitOf = (last: boolean) => (keep === undefined || last ? maxBytes : maxBytes - spare);
+  const measure = async () => {
+    const entries = await store.entries("");
+    counted = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+    return entries;
+  };
 
   /** Evicts until `bytes` more fit under `limit`. False when even evicting everything it may is not enough. */
-  const makeRoom = async (bytes: number, limit: number, skip?: string): Promise<boolean> => {
-    const entries = await store.entries("");
-    let held = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  const makeRoom = async (bytes: number, limit: number): Promise<boolean> => {
+    const entries = await measure();
+    let held = counted!;
     for (const unit of evictable(entries, keep)) {
       if (held + bytes <= limit) break;
-      if (skip !== undefined && unit.prefix === skip) continue;
       await store.deleteTree(unit.prefix);
       held -= unit.bytes;
     }
@@ -112,6 +123,13 @@ export function capped(store: Store, maxBytes: number, keep?: string): CappedSto
     entries: (prefix) => store.entries(prefix),
     deleteTree: (prefix) => store.deleteTree(prefix),
     reserve,
+    async reserveIfFree(bytes, last = false) {
+      const limit = limitOf(last);
+      if (counted === null || counted + bytes > limit) await measure();
+      if (counted! + bytes > limit) return false;
+      counted! += bytes;
+      return true;
+    },
     async release(bytes) {
       if (counted !== null) counted -= bytes;
     },
@@ -122,7 +140,7 @@ export function capped(store: Store, maxBytes: number, keep?: string): CappedSto
         counted += written.bytes;
         return;
       }
-      if (!(await makeRoom(0, limitOf(false), key))) {
+      if (!(await makeRoom(0, limitOf(false)))) {
         await store.deleteTree(key);
         throw new StoreFull(maxBytes, written.bytes, counted! - written.bytes);
       }
@@ -131,9 +149,9 @@ export function capped(store: Store, maxBytes: number, keep?: string): CappedSto
       const bytes = typeof value === "string" ? Buffer.byteLength(value) : value.byteLength;
       const [existing] = await store.entries(key);
       const replaced = existing?.key === key ? existing.bytes : 0;
-      await reserve(bytes);
+      await reserve(Math.max(0, bytes - replaced));
       await store.put(key, value);
-      counted! -= replaced;
+      counted! -= Math.max(0, replaced - bytes);
     },
   };
 }
@@ -144,8 +162,8 @@ export interface RunFiles {
   /** The store the run keeps its sign-in in, under the same cap, which never evicts this run. */
   store: CappedStore;
   /**
-   * Replaces the file with the value as JSON, whole, so a reader never sees half of it; when the cap has no room for
-   * both copies, in place. The `last` write of the run may use the room it kept spare.
+   * Replaces the file with the value as JSON, whole, so a reader never sees half of it; in place when the cap has room
+   * for both copies only by evicting. The `last` write of the run may use the room it kept spare.
    */
   writeJson(name: string, value: unknown, last?: boolean): Promise<void>;
   append(name: string, value: string | Uint8Array): Promise<void>;
@@ -186,13 +204,13 @@ export function runFiles(dir: string, storeDir: string, store: Store, maxBytes: 
     async writeJson(name, value, last = false) {
       const path = join(dir, name);
       const text = `${JSON.stringify(value, null, 2)}\n`;
+      const bytes = Buffer.byteLength(text);
       const replaced = await sizeOf(path);
-      try {
-        await reserve(Buffer.byteLength(text), last);
-      } catch (error) {
-        if (!(error instanceof StoreFull) || replaced === 0) throw error;
-        await reserve(Buffer.byteLength(text) - replaced, last);
+      await reserve(Math.max(0, bytes - replaced), last);
+      const copy = Math.min(bytes, replaced);
+      if (runKey !== undefined && !(await cappedStore.reserveIfFree(copy, last))) {
         await writeFile(path, text);
+        await cappedStore.release(Math.max(0, replaced - bytes));
         return;
       }
       await mkdir(dir, { recursive: true });
