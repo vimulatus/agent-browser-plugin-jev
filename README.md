@@ -160,6 +160,14 @@ soab resume checkout --value "Verification Code=482913"
 
 A value on the command line lands in shell history and the process list, so two more flags take one from elsewhere: `--value-env "<label>=<VAR>"` reads the environment variable, and `--value-file "<label>=<path>"` reads the file, trimmed. Both take the bare form too. An unset variable or a missing file exits 1 and names it, without printing a value.
 
+| Flag | Value | What it does |
+|---|---|---|
+| `--value` | `"<label>=<value>"` or `<value>` | Types the value into the field of that label; bare, into the only field. Repeatable |
+| `--value-env` | `"<label>=<VAR>"` or `<VAR>` | The same, with the value read from the environment variable |
+| `--value-file` | `"<label>=<path>"` or `<path>` | The same, with the value read from the file, trimmed |
+| `--allow` | `<verbs>` | Adds to the last run's allow list |
+| `--open` | `<url>` | Opens this link in the session's browser before going on |
+
 Each value is logged as a step of its own, `given to resume`, and every value `resume` receives is masked in every file and on stdout, whatever the field. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. `--max-steps`, `--out`, `--quiet`, `--no-handoff`, `--login-timeout`, `--human` and `--record` work as they do for `run`.
 
 ### Signing in
