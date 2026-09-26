@@ -6,7 +6,7 @@ import type { Allow } from "./decide.js";
 import { DEFAULT_MODEL } from "./jev.js";
 import { LOGIN_TIMEOUT_MS } from "./login.js";
 import { DEFAULT_MAX_STEPS, type Resume, type RunOptions } from "./run.js";
-import { latestRun, readState, type RunState } from "./runs.js";
+import { latestState, readState, type RunState } from "./runs.js";
 import type { Scopes } from "./scope.js";
 import { newRunDir } from "./session.js";
 
@@ -132,13 +132,13 @@ function labelled(given: Given[], blocker: Blocker | undefined): Resume["values"
  * from, so a resume that failed can be tried again.
  */
 function resumable(scopes: Scopes, session: string): { from: string; state: RunState } | null {
-  let from = latestRun(scopes, session);
-  let state = from === null ? null : readState(from);
-  while (state?.status === "failed" && typeof state.resumedFrom === "string") {
-    from = state.resumedFrom;
-    state = readState(from);
+  let last = latestState(scopes, session);
+  while (last?.state.status === "failed" && typeof last.state.resumedFrom === "string") {
+    const from = last.state.resumedFrom;
+    const state = readState(from);
+    last = state === null ? null : { from, state };
   }
-  return from === null || state === null ? null : { from, state };
+  return last;
 }
 
 /**

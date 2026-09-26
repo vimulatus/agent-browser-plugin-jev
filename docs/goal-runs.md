@@ -85,7 +85,7 @@ soab resume checkout --value "Verification Code=482913"
 | `--allow` | `<verbs>` | Adds to the last run's allow list, so after a `permission` block it makes the click the run refused |
 | `--open` | `<url>` | Opens this link in the session's browser first, for a magic-link sign-in |
 
-With no value it looks at the page again and goes on: that covers a push approval and a retry after a 429. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 and names the problem. Every value `resume` receives is masked in every file and on stdout. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. A refused value writes nothing, and a resume that fails can be run again: it goes on from the run the failed one went on from.
+With no value it looks at the page again and goes on: that covers a push approval and a retry after a 429. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 and names the problem. Every value `resume` receives is masked in every file and on stdout. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. A refused value writes nothing, a run directory with no `status.json` is passed over, and a resume that fails can be run again: it goes on from the run the failed one went on from.
 
 ## Signing in
 

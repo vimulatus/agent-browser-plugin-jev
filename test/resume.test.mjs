@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../dist/run.js";
@@ -179,6 +179,16 @@ test("a value refused on a code block names the label once, says a bare code wor
 test("a resume that failed can be tried again, from the run it went on from", async (t) => {
   const { scopes, first } = await blockedOnCode(t);
   await assert.rejects(resume(t, scopes, ["--value", "482913"], lab("home"), []), /the page has no field "One-time code"/);
+  const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "482913"]));
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  assert.equal(options.resume.from, first.out);
+});
+
+test("a run directory with no status.json, as an older resume left one, does not hide the blocked run", async (t) => {
+  const { scopes, first } = await blockedOnCode(t);
+  const empty = join(first.out, "..", "9999-empty");
+  mkdirSync(empty);
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
   const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "482913"]));
   t.after(() => rmSync(options.out, { recursive: true, force: true }));
   assert.equal(options.resume.from, first.out);
