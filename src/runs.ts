@@ -20,6 +20,20 @@ export function latestRun(scopes: Scopes, session: string): string | null {
   return newest === undefined ? null : join(runs, newest);
 }
 
+/**
+ * The session's newest run that wrote a `status.json`, with it, or null when none did. A directory with none is a run
+ * that never started, such as one an older `resume` made before refusing its value.
+ */
+export function latestState(scopes: Scopes, session: string): { from: string; state: RunState } | null {
+  const runs = join(activeScope(scopes).dir, sessionKey(session), "runs");
+  if (!existsSync(runs)) return null;
+  for (const name of readdirSync(runs).sort().reverse()) {
+    const state = readState(join(runs, name));
+    if (state !== null) return { from: join(runs, name), state };
+  }
+  return null;
+}
+
 export function readState(dir: string): RunState | null {
   const path = join(dir, "status.json");
   return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as RunState) : null;

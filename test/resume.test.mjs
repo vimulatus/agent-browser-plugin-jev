@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../dist/run.js";
 import { parseResumeArgs, resumeOptions } from "../dist/resume.js";
-import { isolatedScopes, lab, labRun, lines, scriptedBrowser, scriptedJev } from "./helpers.mjs";
+import { isolatedScopes, lab, labRun, labRunPages, lines, scriptedBrowser, scriptedJev } from "./helpers.mjs";
 
 const READS = /^(snapshot|get |console|errors|network requests)/;
 
@@ -134,4 +134,62 @@ test("resume takes a value from an env var or a file, types it and ends done, ma
 test("an unset variable or a missing file is refused by name, and no value is printed (#93)", () => {
   assert.throws(() => parseResumeArgs(["lab", "--value-env", "Code=NOT_SET_ANYWHERE"], {}), /environment variable NOT_SET_ANYWHERE is not set/);
   assert.throws(() => parseResumeArgs(["lab", "--value-file", "Code=/nowhere/code.txt"], {}), /no file at \/nowhere\/code.txt/);
+});
+
+/** Six boxes that all read "Verification Code" and set no maxlength, as a real sign-in page drew them; then the boxes full. */
+function sameLabelBoxes() {
+  return lab("otp-no-advance", "otp-no-advance-typed").map(({ attrs, ...page }) => ({
+    ...page,
+    snapshot: page.snapshot.replace(/Digit \d of 6/g, "Verification Code"),
+    full: page.full.replace(/Digit \d of 6/g, "Verification Code"),
+  }));
+}
+
+async function blockedOnBoxes(t) {
+  const scopes = isolatedScopes();
+  const [boxes] = sameLabelBoxes();
+  const first = await labRunPages(t, [boxes], [{ operation: "TYPE_TEXT", target: "1", kind: "otp" }], "sign in to Acme", { scopes });
+  assert.equal(first.result.blocker.kind, "otp");
+  assert.equal(first.result.blocker.fields.length, 6);
+  return { scopes, first };
+}
+
+test("a code over six boxes that share one label goes in one character a box, bare or under the label", async (t) => {
+  for (const argv of [["--value", "792316"], ["--value", "Verification Code=792316"]]) {
+    const { scopes } = await blockedOnBoxes(t);
+    const { acts, options } = await resume(t, scopes, argv, sameLabelBoxes(), [{ operation: "BLOCKED" }], (args, state) =>
+      args[0] === "fill" && args[1] === "@e7" ? 1 : state.index,
+    );
+    assert.deepEqual(acts.slice(0, 6), ["fill @e2 7", "fill @e3 9", "fill @e4 2", "fill @e5 3", "fill @e6 1", "fill @e7 6"], argv.join(" "));
+    assert.doesNotMatch(readFileSync(join(options.out, "inferred.jsonl"), "utf8"), /792316/);
+  }
+});
+
+test("a value refused on a code block names the label once, says a bare code works, and leaves the run to resume", async (t) => {
+  const { scopes, first } = await blockedOnBoxes(t);
+  assert.throws(
+    () => resumeOptions(scopes, parseResumeArgs(["lab", "--value", "otp=792316"])),
+    /^Error: the run is not blocked on a field "otp"; it needs "Verification Code", or the 6-character code as a bare --value$/,
+  );
+  const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "792316"]));
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  assert.equal(options.resume.from, first.out);
+});
+
+test("a resume that failed can be tried again, from the run it went on from", async (t) => {
+  const { scopes, first } = await blockedOnCode(t);
+  await assert.rejects(resume(t, scopes, ["--value", "482913"], lab("home"), []), /the page has no field "One-time code"/);
+  const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "482913"]));
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  assert.equal(options.resume.from, first.out);
+});
+
+test("a run directory with no status.json, as an older resume left one, does not hide the blocked run", async (t) => {
+  const { scopes, first } = await blockedOnCode(t);
+  const empty = join(first.out, "..", "9999-empty");
+  mkdirSync(empty);
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const options = resumeOptions(scopes, parseResumeArgs(["lab", "--value", "482913"]));
+  t.after(() => rmSync(options.out, { recursive: true, force: true }));
+  assert.equal(options.resume.from, first.out);
 });

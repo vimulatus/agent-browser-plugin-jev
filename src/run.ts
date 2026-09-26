@@ -1,7 +1,7 @@
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { keepAuth, loadAuth, saveAuth } from "./auth.js";
 import { openBrowser, type Browser } from "./browser.js";
-import { codeBoxes } from "./boxes.js";
+import { boxesFrom, codeBoxes } from "./boxes.js";
 import { blockerOf, blocksBeforeActing, networkBlocker, type Blocker, type Cause } from "./blocker.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -68,7 +68,8 @@ export interface RunOptions {
 export interface Resume {
   from: string;
   open?: string;
-  values: { label: string; value: string }[];
+  /** `code` marks a code split over boxes: one character goes into each, from the box of `label` on. */
+  values: { label: string; value: string; code?: true }[];
 }
 
 /** The allow list as `status.json` keeps it, so `resume` can read it back. */
@@ -429,11 +430,11 @@ export async function run(options: RunOptions, injected?: Deps): Promise<RunResu
     const typeGiven = async (values: Resume["values"]) => {
       if (values.length === 0) return;
       const page = await observe(deps.browser);
-      for (const { label, value } of values) {
+      for (const { label, value, code } of values) {
         const field = page.elements.find((element) => element.label === label && element.operations.includes("TYPE_TEXT"));
         if (field === undefined) throw new Error(`the page has no field "${label}" to type the value into`);
         secrets.add(value, label);
-        const boxes = await codeBoxes(deps.browser, page.elements, field.ref, value);
+        const boxes = (code ? boxesFrom(page.elements, field.ref, value.length) : null) ?? (await codeBoxes(deps.browser, page.elements, field.ref, value));
         if (boxes === null) await deps.browser.act({ operation: "TYPE_TEXT", ref: field.ref, value });
         for (const [at, box] of (boxes ?? []).entries()) {
           await deps.browser.act({ operation: "TYPE_TEXT", ref: box.ref, value: value[at] });
