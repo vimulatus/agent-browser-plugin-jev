@@ -80,4 +80,4 @@ soab session reset checkout   # delete the session's runs and sign-in
 
 `store.maxBytes` caps the active scope's store, 1 GiB by default. Before each write the run evicts the least recently used state until the write fits: whole run directories first, then sign-ins. Policies, `config.json` and the run that is writing are never evicted. A write that does not fit once everything evictable is gone fails the run, with the cap and the size in `reason`.
 
-Last use is recorded in `sessions/.used.json`, not in file access times. Recordings and screenshots are measured after agent-browser writes them, so a recording in progress can take the store past the cap by its own size. Only files in the store count: an `--out` outside it, or a `--record` file outside the run directory, is not capped.
+Recordings and screenshots are measured after agent-browser writes them, so a recording in progress can take the store past the cap by its own size. Only files in the store count: an `--out` outside it, or a `--record` file outside the run directory, is not capped.

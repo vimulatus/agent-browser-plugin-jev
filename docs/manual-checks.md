@@ -10,8 +10,8 @@
 | A walk reproduces what it finds | the same, with ffmpeg on PATH | Yes. Three findings, two reproduced with a `.webm` and a screenshot each |
 | A code over six boxes | `run "enter the code 123456 and verify" --url .../otp-no-advance.html` | Yes. One TYPE over the six boxes, `status: "done"` on `/home.html` |
 | Resume after a code step | `run "sign in to Acme" --url .../otp-single.html`, then `resume <session> --value 123456` | Yes. Blocks as `otp`; a wrong code blocks again on the same field; the right one lands `done`. Neither code is in any run file |
-| A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. Checked against agent-browser 0.38.1 without Jev: a playable `.webm` with an easing cursor |
-| A page handed to a window | `run "open my invoices" --url <a captcha page>` from a terminal with a display | No. The relaunch into a window and back ran against agent-browser 0.38.1 without Jev (#67); the poll has not run against a real login page |
+| A recording of a goal run | `run "<goal>" --record ./login.webm --human` | No. Checked without Jev: a playable `.webm` with an easing cursor |
+| A page handed to a window | `run "open my invoices" --url <a captcha page>` from a terminal with a display | No. The window and the return to headless were checked without Jev; the poll has not run against a real login page |
 | A sign-in carries to the next run | a goal run that signs in on a real login page, then a second run of the same `--session` | No. `state save` then `state load` carried a cookie and a localStorage key without Jev |
 
 The Jev answers under `test/replay/` are written by hand to the response shape the [API page](https://docs.typesafe.ai/api) documents. Replace a file with a real recording when a key is at hand; the tests read the same fields either way.

@@ -6,7 +6,7 @@ soab run "log in as alice@example.com with password secret and open Settings" \
   --url http://127.0.0.1:8765/login.html
 ```
 
-It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped. `durationMs` is the whole milliseconds the command took, off a monotonic clock. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
+It prints `{ status, url, steps, actions, findings, snapshot, out, record, recordings, reason, durationMs }` as JSON, and exits 0 when the goal is met, 2 when the run is blocked, 3 when it was stopped. `durationMs` is how long the command took. A blocked run adds `blocker`, see [When a run is blocked](#when-a-run-is-blocked).
 
 | Flag | Value | What it does |
 |---|---|---|
@@ -26,9 +26,7 @@ It prints `{ status, url, steps, actions, findings, snapshot, out, record, recor
 
 ## How a step works
 
-One step is one request to [System One](https://docs.typesafe.ai/api): a Choice for the operation, one Choice of target per operation, one Choice per typeable field of which span of the goal belongs in it, a Noul for whether the click is irreversible, and a Noul for whether the page shows the goal's outcome. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops instead. Jev reads the whole accessibility tree, cut at 6000 characters; a page offers it at most 20 typeable fields.
-
-A code split over single-character boxes gets one character per box: when the picked field is the first of a row of adjacent fields with `maxlength` 1, one per character, the run fills them in order.
+Each step, Jev picks an action and the field values from the goal. Jev writes no text: a value the goal does not contain cannot be typed, and the run stops and names the field. A code split over one-character boxes gets one character per box.
 
 ## When it ends
 
@@ -64,7 +62,7 @@ A blocked run's result, and its `status.json`, carry `blocker`:
 
 `fields` lists every empty field the goal holds no value for when the kind is `otp`, `sign_in` or `missing_value`, and is empty for the others. After a wrong code no field is empty, so `fields` names every field on the page, to be typed again.
 
-A `captcha` or an `approval`, or a `sign_in` with nothing in the goal to type such as a magic-link page, ends the run at that step with nothing clicked, because each act there counts as an attempt on a real app. `error_page` and `rate_limit` are read from the network before Jev is asked anything. The kind costs no extra call: every step asks Jev a `blocker_kind` Choice, logged in `inferred.jsonl` as `blockerProbabilities`.
+A `captcha` or an `approval`, or a `sign_in` with nothing in the goal to type such as a magic-link page, ends the run at that step with nothing clicked, because each act there counts as an attempt on a real app. `error_page` and `rate_limit` are read from the network before Jev is asked anything.
 
 ## Resume a blocked run
 

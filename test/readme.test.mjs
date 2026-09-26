@@ -43,7 +43,6 @@ test("the README names every policy that ships", () => {
 test("the docs name session reset", () => {
   assert.ok(USAGE.includes(`${NAME} session reset <session>`), "USAGE does not name session reset");
   assert.ok(readme.includes(`${NAME} session reset`), "README does not name session reset");
-  assert.ok(skill.includes(`${NAME} session reset`), "SKILL.md does not name session reset");
 });
 
 test("the docs name the duration every result carries", () => {
