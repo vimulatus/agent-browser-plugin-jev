@@ -17,3 +17,13 @@ export async function codeBoxes(browser: Browser, elements: Element[], ref: stri
   }
   return boxes.length === value.length ? boxes : null;
 }
+
+/**
+ * The `count` fields that start at `ref` and follow it on the page, or null when fewer than `count` do. For a code the
+ * blocked run already counted its boxes for, so no `maxlength` is needed to tell them apart from other fields.
+ */
+export function boxesFrom(elements: Element[], ref: string, count: number): Element[] | null {
+  const start = elements.findIndex((element) => element.ref === ref);
+  const boxes = elements.slice(start, start + count);
+  return start >= 0 && boxes.length === count && boxes.every((element) => element.operations.includes("TYPE_TEXT")) ? boxes : null;
+}

@@ -28,7 +28,7 @@ Exit 2 means blocked, and the result carries `blocker: { kind, fields, reason }`
 
 | `kind` | Do |
 |---|---|
-| `otp`, `sign_in`, `missing_value` | Ask your person for each label in `fields`, then `resume` with `--value-env "<label>=<VAR>"` or `--value "<label>=<value>"` |
+| `otp`, `sign_in`, `missing_value` | Ask your person for each label in `fields`, then `resume` with `--value-env "<label>=<VAR>"` or `--value "<label>=<value>"`. A code split over boxes takes one bare `--value <code>` |
 | `sign_in` on a page that emails a link | Ask for the link, then `resume --open <url>` |
 | `approval` | Ask your person to approve, then `resume` |
 | `permission` | Ask whether the refused action is wanted; on yes, `resume --allow <verb>` |

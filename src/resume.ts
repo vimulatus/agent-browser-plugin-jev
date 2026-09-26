@@ -5,8 +5,8 @@ import type { Blocker } from "./blocker.js";
 import type { Allow } from "./decide.js";
 import { DEFAULT_MODEL } from "./jev.js";
 import { LOGIN_TIMEOUT_MS } from "./login.js";
-import { DEFAULT_MAX_STEPS, type RunOptions } from "./run.js";
-import { latestRun, readState } from "./runs.js";
+import { DEFAULT_MAX_STEPS, type Resume, type RunOptions } from "./run.js";
+import { latestRun, readState, type RunState } from "./runs.js";
 import type { Scopes } from "./scope.js";
 import { newRunDir } from "./session.js";
 
@@ -101,9 +101,17 @@ function widened(saved: Allow, added: Allow): Allow {
   return saved === "all" || added === "all" ? "all" : new Set([...saved, ...added]);
 }
 
-/** Each value with the label of the field it goes into: its own label, which must be one the blocker named, or the only field's. */
-function labelled(given: Given[], blocker: Blocker | undefined): { label: string; value: string }[] {
-  const fields = blocker?.fields.map((field) => field.label) ?? [];
+/**
+ * Each value with the label of the field it goes into: its own label, which must be one the blocker named, or the only
+ * field's. On a code split over boxes, one value as long as the boxes are many is the whole code: bare or under any
+ * box's label, it goes into the first box and on over the rest, whatever the boxes are labelled.
+ */
+function labelled(given: Given[], blocker: Blocker | undefined): Resume["values"] {
+  const fields = [...new Set(blocker?.fields.map((field) => field.label) ?? [])];
+  const boxes = blocker?.kind === "otp" ? blocker.fields : [];
+  if (given.length === 1 && boxes.length > 1 && given[0].value.length === boxes.length && (given[0].label === null || fields.includes(given[0].label))) {
+    return [{ label: boxes[0].label, value: given[0].value, code: true }];
+  }
   return given.map(({ label, value }) => {
     if (label === null) {
       if (fields.length !== 1) {
@@ -112,10 +120,25 @@ function labelled(given: Given[], blocker: Blocker | undefined): { label: string
       return { label: fields[0], value };
     }
     if (!fields.includes(label)) {
-      throw new Error(`the run is not blocked on a field "${label}"; it needs ${fields.map((field) => `"${field}"`).join(", ") || "no field"}`);
+      const code = boxes.length > 1 ? `, or the ${boxes.length}-character code as a bare --value` : "";
+      throw new Error(`the run is not blocked on a field "${label}"; it needs ${fields.map((field) => `"${field}"`).join(", ") || "no field"}${code}`);
     }
     return { label, value };
   });
+}
+
+/**
+ * The run `resume` goes on from: the session's newest, or when that one is a resume that failed, the run it went on
+ * from, so a resume that failed can be tried again.
+ */
+function resumable(scopes: Scopes, session: string): { from: string; state: RunState } | null {
+  let from = latestRun(scopes, session);
+  let state = from === null ? null : readState(from);
+  while (state?.status === "failed" && typeof state.resumedFrom === "string") {
+    from = state.resumedFrom;
+    state = readState(from);
+  }
+  return from === null || state === null ? null : { from, state };
 }
 
 /**
@@ -124,9 +147,9 @@ function labelled(given: Given[], blocker: Blocker | undefined): { label: string
  * written to a new run directory under the same session.
  */
 export function resumeOptions(scopes: Scopes, args: ResumeArgs): RunOptions {
-  const from = latestRun(scopes, args.session);
-  const state = from === null ? null : readState(from);
-  if (from === null || state === null) throw new Error(`session ${args.session} has no run to resume`);
+  const last = resumable(scopes, args.session);
+  if (last === null) throw new Error(`session ${args.session} has no run to resume`);
+  const { from, state } = last;
   if (state.status !== "blocked" && state.status !== "stopped") {
     throw new Error(`session ${args.session}'s last run is ${state.status}, not blocked or stopped: nothing to resume`);
   }
@@ -135,6 +158,8 @@ export function resumeOptions(scopes: Scopes, args: ResumeArgs): RunOptions {
   // A walk numbers its steps on from the one it resumes, so its budget counts them; a goal run starts its count again.
   const walk = typeof state.goal !== "string";
   const left = args.maxSteps ?? Math.max(0, maxSteps - taken);
+  // Checked before the run directory exists: an empty one would be the session's newest run, and hide this one.
+  const values = labelled(args.given, state.blocker as Blocker | undefined);
   return {
     goal: walk ? "" : (state.goal as string),
     ...(walk && typeof state.policy === "string" ? { policy: state.policy } : {}),
@@ -153,7 +178,7 @@ export function resumeOptions(scopes: Scopes, args: ResumeArgs): RunOptions {
     resume: {
       from,
       ...(args.open === undefined ? {} : { open: args.open }),
-      values: labelled(args.given, state.blocker as Blocker | undefined),
+      values,
     },
   };
 }

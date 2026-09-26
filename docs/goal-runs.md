@@ -79,13 +79,13 @@ soab resume checkout --value "Verification Code=482913"
 
 | Flag | Value | What it does |
 |---|---|---|
-| `--value` | `"<label>=<value>"` or `<value>` | Types the value into the field of that label, as `blocker.fields` names it; bare, into the only field. Repeatable |
+| `--value` | `"<label>=<value>"` or `<value>` | Types the value into the field of that label, as `blocker.fields` names it; bare, into the only field. On an `otp` whose code is split over boxes, one value as long as the boxes are many goes in one character a box, bare or under any box's label. Repeatable |
 | `--value-env` | `"<label>=<VAR>"` or `<VAR>` | The same, read from the environment variable, out of shell history |
 | `--value-file` | `"<label>=<path>"` or `<path>` | The same, read from the file, trimmed |
 | `--allow` | `<verbs>` | Adds to the last run's allow list, so after a `permission` block it makes the click the run refused |
 | `--open` | `<url>` | Opens this link in the session's browser first, for a magic-link sign-in |
 
-With no value it looks at the page again and goes on: that covers a push approval and a retry after a 429. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 and names the problem. Every value `resume` receives is masked in every file and on stdout. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`.
+With no value it looks at the page again and goes on: that covers a push approval and a retry after a 429. A label the blocker did not name, or a session whose last run is neither blocked nor stopped, exits 1 and names the problem. Every value `resume` receives is masked in every file and on stdout. It writes a new run directory under the same session, whose `status.json` names the run it went on from as `resumedFrom`. A refused value writes nothing, and a resume that fails can be run again: it goes on from the run the failed one went on from.
 
 ## Signing in
 
