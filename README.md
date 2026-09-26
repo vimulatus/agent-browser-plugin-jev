@@ -1,37 +1,49 @@
 # soab
 
-`soab` drives a browser for an agent. Give it a goal and it takes the browser there. Give it a policy and it judges what the browser shows and writes the findings to a file. [Jev](https://docs.typesafe.ai) picks every action, so the agent spends no tool calls on navigation.
+Your agent describes where it wants to go in a browser, and soab takes it there in one command. It can also walk a web app, find bugs, and hand back each one with a recording.
 
 ## Install
 
-Needs Node 20.18.1 or newer and [agent-browser](https://github.com/vercel-labs/agent-browser) on PATH.
+You need Node 20.18.1 or newer, [agent-browser](https://github.com/vercel-labs/agent-browser), and a [TypeSafe](https://docs.typesafe.ai) API key.
 
 ```bash
 npm install -g soab
-export TYPESAFE_API_KEY=...
+export TYPESAFE_API_KEY=your-key
 ```
 
-To teach an agent to use it: `npx skills add vimulatus/soab`.
-
-## Use
+## Reach a page
 
 ```bash
-# reach a page
 soab run "log in as alice@example.com with password secret and open Settings" --url http://localhost:3000/login
-
-# check the current page for errors
-soab run --policy errors --max-steps 0
-
-# walk the app for bugs and write findings.json
-soab run --policy bug-hunt --url http://localhost:3000/ --max-steps 40
 ```
 
-A run prints one JSON line and exits 0 when done, 1 when failed, 2 when blocked, 3 when stopped. `soab` with no arguments prints every command and flag.
+soab only types what your goal contains. When a page asks for something it lacks, such as a one-time code, the run stops and names the field. Give it the value and it carries on from the same page:
 
-## Docs
+```bash
+soab resume <session> --value "Verification code=482913"
+```
 
-- [Goal runs](docs/goal-runs.md): when a run ends, blockers, `resume`, signing in, recording
-- [Walks](docs/walks.md): judging one page, walking an app, test data, evidence
-- [Policies](docs/policies.md): writing a policy, and the ones that ship
-- [State and output](docs/state.md): `soab init`, run files, `findings.json`, sessions
-- [Checked by hand](docs/manual-checks.md): for contributors, what has run for real
+## Find bugs
+
+```bash
+soab run --policy bug-hunt --url http://localhost:3000/
+```
+
+soab tries every button and link it finds, then writes `findings.json` with a screenshot and a recording for each bug. It won't delete, send or pay for anything unless you add `--allow`.
+
+## Let your agent use it
+
+```bash
+npx skills add vimulatus/soab
+```
+
+This teaches your agent when to run soab and what to do when a run stops.
+
+## Learn more
+
+- [Goal runs](docs/goal-runs.md): signing in, resuming, recording
+- [Walks](docs/walks.md): checking one page, walking an app, test data
+- [Policies](docs/policies.md): writing your own checks
+- [State and output](docs/state.md): where runs are saved, and what `findings.json` holds
+
+Run `soab` with no arguments to see every command.

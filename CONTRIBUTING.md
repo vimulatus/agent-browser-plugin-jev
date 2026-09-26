@@ -1,4 +1,8 @@
-# Checked by hand
+# Contributing
+
+`pnpm install && pnpm build && npm link` puts your local build on PATH as `soab`. Run `pnpm build` again after a pull.
+
+## Checked by hand
 
 `pnpm test` replays recorded agent-browser output and hand-written Jev answers, and never calls the paid API. The checks below prove the real thing. Each needs a real `TYPESAFE_API_KEY`, a local fixture site and an agent-browser session of its own.
 
