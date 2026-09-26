@@ -1,14 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { USAGE } from "../dist/args.js";
 import { COLLECTIONS } from "../dist/policy/load.js";
 import { NAME, STATE_DIR } from "../dist/name.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const readme = readFileSync(`${root}README.md`, "utf8");
-const skill = readFileSync(`${root}SKILL.md`, "utf8");
+const read = (dir) => readdirSync(`${root}${dir}`).filter((f) => f.endsWith(".md")).map((f) => readFileSync(`${root}${dir}/${f}`, "utf8"));
+/** The README is the front page and docs/ holds the rest, so the checks read them as one text. */
+const front = readFileSync(`${root}README.md`, "utf8");
+const readmeFiles = [front, ...read("docs")];
+const readme = readmeFiles.join("\n");
+const skillEntry = readFileSync(`${root}skills/${NAME}/SKILL.md`, "utf8");
+/** The skill is its entrypoint plus the references it points at. */
+const skillFiles = [skillEntry, ...read(`skills/${NAME}/references`)];
+const skill = skillFiles.join("\n");
 
 /** Every name the docs must carry is read back out of the package, so a rename breaks this test. */
 const flags = [...new Set(USAGE.match(/--[a-z][a-z-]*/g))];
@@ -50,13 +57,29 @@ test("the docs name the file a result that wrote findings points at", () => {
 });
 
 test("SKILL.md has the frontmatter npx skills add reads", () => {
-  const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(skill);
+  const frontmatter = /^---\n([\s\S]*?)\n---\n/.exec(skillEntry);
   assert.ok(frontmatter, "SKILL.md starts with no YAML frontmatter");
-  assert.match(frontmatter[1], /^name: \S/m);
+  assert.match(frontmatter[1], new RegExp(`^name: ${NAME}$`, "m"));
   assert.match(frontmatter[1], /^description: \S/m);
 });
 
-test("SKILL.md carries the install, the policy grammar and both run forms", () => {
+test("SKILL.md links every reference, and every link resolves", () => {
+  for (const file of readdirSync(`${root}skills/${NAME}/references`)) {
+    assert.ok(skillEntry.includes(`](references/${file})`), `SKILL.md does not link references/${file}`);
+  }
+});
+
+test("the README links every doc, and every doc link resolves", () => {
+  for (const file of readdirSync(`${root}docs`)) {
+    assert.ok(front.includes(`](docs/${file})`), `README does not link docs/${file}`);
+  }
+  for (const [, target] of readme.matchAll(/\]\(((?:docs\/)?[a-z-]+\.md)(?:#[a-z-]+)?\)/g)) {
+    const path = target.startsWith("docs/") ? target : `docs/${target}`;
+    assert.ok(existsSync(`${root}${path}`), `a doc links ${target}, which does not exist`);
+  }
+});
+
+test("the skill carries the install, the policy grammar and both run forms", () => {
   for (const collection of COLLECTIONS) {
     assert.ok(documents(skill, collection), `SKILL.md does not name collect: ${collection}`);
   }
@@ -82,11 +105,15 @@ test("the docs run the command by its name, never as jev", () => {
 
 test("the docs name init, both scopes and the order a policy is looked up in", () => {
   const order = [`./${STATE_DIR}/policies/`, `~/${STATE_DIR}/policies/`, "shipped"];
-  for (const [file, text] of [["README.md", readme], ["SKILL.md", skill]]) {
-    for (const token of [`${NAME} init`, `./${STATE_DIR}/`, `~/${STATE_DIR}/`, `${STATE_DIR}/sessions/`, "${VAR}"]) {
+  const givesOrder = (text) => {
+    const at = order.map((step) => text.indexOf(step));
+    return at.every((i, n) => i !== -1 && (n === 0 || i > at[n - 1]));
+  };
+  for (const [file, text, files] of [["README.md", readme, readmeFiles], ["SKILL.md", skill, skillFiles]]) {
+    for (const token of [`${NAME} init`, `./${STATE_DIR}/`, `~/${STATE_DIR}/`, `${STATE_DIR}/sessions/`]) {
       assert.ok(text.includes(token), `${file} does not name ${token}`);
     }
-    const at = order.map((step) => text.indexOf(step));
-    assert.ok(at.every((i, n) => i !== -1 && (n === 0 || i > at[n - 1])), `${file} does not give the lookup order`);
+    assert.ok(files.some(givesOrder), `${file} does not give the lookup order`);
   }
+  assert.ok(readme.includes("${VAR}"), "README does not name ${VAR}");
 });
